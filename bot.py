@@ -1,5 +1,6 @@
-"""Mech Royale bot, team 2.3%. Variant S9: every match is driven by lance_plus.py, our fork of the public MIT bot
-(lance_bot.py, LanceHuang245) with our strategy switches (params.json hybrid.lance_flags). S8 ran plain lance_bot.py.
+"""Mech Royale bot, team 2.3%. Variant S10: every match is driven by lance_plus.py, our fork of the public MIT bot
+(lance_bot.py, LanceHuang245), with the switches in params.json hybrid.lance_flags. S10 turns them all off, which is
+Lance's bot with quiet walking (sneak) off. S8 ran plain lance_bot.py (4.54); S9 ran jink,arm,focus,range (4.50).
 The free-for-all handoff to our own brain (below) is off (hybrid.ffa_switch_max_s = 0) but still wired.
 Earlier, variant L: J ("blend": I's awareness + reasoner rules with F's farming) plus the fight read (brain/situation.py:
 run or stay from who has a line on us, who is coming and who wins the trade, never from an HP line), laser kit.
@@ -41,7 +42,7 @@ except Exception as e:
     print("lance_plus import failed:", e, file=sys.stderr)
     lance_plus = None
 
-VARIANT = "S9"
+VARIANT = "S10"
 
 
 def load_params():

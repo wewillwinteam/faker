@@ -680,7 +680,7 @@
  },
  "hybrid": {
   "practice": "lance_plus",
-  "lance_flags": "jink,arm,focus,range",
+  "lance_flags": "",
   "ffa_switch_max_s": 0
  }
 }
