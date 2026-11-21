@@ -82,6 +82,17 @@ def keep_in_front(w, e):
     return nx, ny
 
 
+def laser_still(w, d):
+    """Stand still with the laser (owner idea; #1 practice bot parks 100-180 m out with a laser): a planted mech
+    charges and lands the beam; the dodge reflex still steps us off incoming fire."""
+    sec = w.weapons[1]
+    if not w.mode_p.get("laser_still") or sec is None or sec["kind"] != "laser":
+        return False
+    if d < w.mode_p.get("still_min", 80.0) or d > 275:
+        return False
+    return sec.get("cooldown", 0) == 0 or (sec.get("charge") or 0) > 0
+
+
 def secondary_fire(w, e, d, yaw, aim, tol):
     """Fire control for slot 1. Returns (fire1, aim)."""
     sec = w.weapons[1]
@@ -253,6 +264,8 @@ class CombatAgent(Agent):
         mv = list(unit(px - w.x, py - w.y)) if math.dist((px, py), (w.x, w.y)) > 3 else [vx / 12.0, vy / 12.0]
         rear = abs(ang_diff(math.atan2(w.y - ey, w.x - ex), face))
         boost = w.lrange is not None and rear < 1.75 and w.me["energy"] > 30
+        if laser_still(w, d):
+            return plan([0.0, 0.0], aim, fire, False, note="strike: still laser")
         return plan(mv, aim, fire, boost, note="strike")
 
     def duel(self, w, e, fire_ok=True):
@@ -292,6 +305,8 @@ class CombatAgent(Agent):
         if not w.me["in_zone"]:
             mv, boost = [zv[0] - uy * s * 0.3, zv[1] + ux * s * 0.3], w.me["energy"] > 25
         jump = (w.tick % 34 == 0) and d > 40
+        if laser_still(w, d) and w.me["in_zone"]:
+            return plan([0.0, 0.0], aim, [f0, f1], False, False, note="duel: still laser")
         return plan(mv, aim, [f0, f1], boost, jump, note="duel")
 
 
@@ -331,16 +346,17 @@ class LootAgent(Agent):
         # cubes and supply drops nearby (drops: only if hidden there)
         cand = []
         cc, cr = w.zone["center"], w.zone["radius"]
+        mp = w.mode_p
         for c in w.obs["cubes"]:
             dd = math.dist(c["pos"][:2], (w.x, w.y))
-            if dd < 80 and abs(c["pos"][2] - w.z) < 6 and math.dist(c["pos"][:2], cc) < cr * 0.92:
+            if dd < mp.get("cube_r", 80.0) and abs(c["pos"][2] - w.z) < 6 and math.dist(c["pos"][:2], cc) < cr * 0.92:
                 cand.append((dd * 0.6, c["pos"], "cube"))
         for dr in w.obs["drops"]:
             dp = dr["pos"]
             dd = math.dist(dp[:2], (w.x, w.y))
-            if dr.get("holder") not in (None, w.me["id"]) or dd > 220 or math.dist(dp[:2], cc) > cr * 0.92:
+            if dr.get("holder") not in (None, w.me["id"]) or dd > mp.get("drop_r", 220.0) or math.dist(dp[:2], cc) > cr * 0.92:
                 continue
-            if dr.get("lands_in", 99) < dd / 11.0 + 6 and w.p_undetected(dp[0], dp[1], dp[2]) > self.p["min_p"]:
+            if mp.get("drop_any") or (dr.get("lands_in", 99) < dd / 11.0 + 6 and w.p_undetected(dp[0], dp[1], dp[2]) > self.p["min_p"]):
                 cand.append((dd * 0.5, dp, "drop"))
         if not cand:
             return None
@@ -349,7 +365,8 @@ class LootAgent(Agent):
         mv = list(w.goto(gp[0], gp[1]))
         if kind == "drop" and math.dist(gp[:2], (w.x, w.y)) < 4:
             mv = [0.0, 0.0]
-        return bid * 0.8, plan(mv, [math.atan2(gp[1] - w.y, gp[0] - w.x), 0.0], note=kind)
+        lb = mp.get("loot_cube_bid", bid * 0.8)
+        return lb, plan(mv, [math.atan2(gp[1] - w.y, gp[0] - w.x), 0.0], boost=math.dist(gp[:2], (w.x, w.y)) > 50 and w.me["energy"] > mp.get("farm_boost_energy", 101), note=kind)
 
 
 # ------------------------------------------------------------------------------------------------------------
@@ -411,9 +428,13 @@ class FarmAgent(Agent):
     name = "farm"
 
     def propose(self, w):
-        if w.me["cubes"] >= self.p["max_cubes"] or (w.ffa and w.t > 120) or w.enemies:
+        mp = w.mode_p
+        if w.me["cubes"] >= mp.get("farm_max_cubes", self.p["max_cubes"]) or (w.ffa and w.t > 120):
             return None
-        if (getattr(w, "intent", None) or {}).get("intent") not in (None, "rotate", "get weapon"):
+        if w.enemies and min(e["_d"] for e in w.enemies) < mp.get("farm_enemy_r", 1e9):
+            return None
+        it = (getattr(w, "intent", None) or {}).get("intent")
+        if it not in (None, "rotate", "get weapon") and not (mp.get("farm_over_fights") and it in ("stalk", "strike") and not w.alerted):
             return None
         if w.tracker.near(w.x, w.y, w.mode_p.get("farm_clear_r", self.p.get("clear_r", 120.0)), max_age=8.0):
             return None
@@ -421,14 +442,20 @@ class FarmAgent(Agent):
             return None
         cc, cr = w.zone["center"], w.zone["radius"]
         cand = []
+        nr_, cr_ = mp.get("farm_npc_r", 170.0), mp.get("farm_crate_r", 120.0)
         for n in w.npcs:
             dd = math.dist(n["pos"][:2], (w.x, w.y))
-            if dd < 170 and math.dist(n["pos"][:2], cc) < cr * 0.92:
+            if dd < nr_ and math.dist(n["pos"][:2], cc) < cr * 0.92:
                 cand.append((dd, n["pos"], "npc"))
         for c in w.obs["crates"]:
             dd = math.dist(c["pos"][:2], (w.x, w.y))
-            if dd < 120 and abs(c["pos"][2] - w.z) < 8 and math.dist(c["pos"][:2], cc) < cr * 0.92:
+            if dd < cr_ and abs(c["pos"][2] - w.z) < 8 and math.dist(c["pos"][:2], cc) < cr * 0.92:
                 cand.append((dd * 1.2 + 20, c["pos"], "crate"))
+        if mp.get("farm_memory"):            # crates/drones seen earlier, still out of view
+            for k, (pos, kind, t) in list(getattr(w, "farm_mem", {}).items()):
+                dd = math.dist(pos[:2], (w.x, w.y))
+                if w.t - t < 90 and dd < mp.get("farm_mem_r", 300.0) and math.dist(pos[:2], cc) < cr * 0.92:
+                    cand.append((dd * 1.4 + 40, pos, kind))
         if not cand:
             return None
         cand.sort(key=lambda c: c[0])
@@ -449,7 +476,8 @@ class FarmAgent(Agent):
         elif gd < 15:
             ax, ay = unit(w.x - gp[0], w.y - gp[1])
             mv = [ax * 0.5, ay * 0.5]
-        return self.p["bid"], plan(mv, aim, fire, note=kind)
+        boost = gd > 60 and w.me["energy"] > mp.get("farm_boost_energy", 101)
+        return mp.get("farm_bid", self.p["bid"]), plan(mv, aim, fire, boost=boost, note=kind)
 
 
 # ------------------------------------------------------------------------------------------------------------

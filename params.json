@@ -554,7 +554,22 @@
         "thirdparty",
         "roof"
       ],
-      "never_run": true
+      "never_run": true,
+      "laser_still": false,
+      "still_min": 80.0,
+      "farm_enemy_r": 120,
+      "farm_clear_r": 0,
+      "farm_npc_r": 400,
+      "farm_crate_r": 300,
+      "farm_max_cubes": 30,
+      "farm_bid": 0.9,
+      "drop_any": true,
+      "drop_r": 500,
+      "cube_r": 200,
+      "loot_cube_bid": 0.95,
+      "farm_memory": true,
+      "farm_mem_r": 400,
+      "farm_boost_energy": 40
     },
     "ffa": {
       "cover_in_fights": true,

@@ -291,6 +291,17 @@ class World:
         # enemies: visible now, plus memory
         self.enemies = [m for m in obs["mechs"] if m["kind"] == "mech"]
         self.npcs = [m for m in obs["mechs"] if m["kind"] == "npc"]
+        fm = self.__dict__.setdefault("farm_mem", {})
+        for n in self.npcs:
+            fm[("n", n["id"])] = (n["pos"], "npc", self.t)
+        for c in obs.get("crates") or []:
+            fm[("c", c["id"])] = (c["pos"], "crate", self.t)
+        for ev in obs["events"]:
+            if ev["type"] in ("kill", "destroyed", "crate"):
+                for key in [k for k in fm if k[1] == ev.get("target") or k[1] == ev.get("id")]:
+                    fm.pop(key, None)
+        for key in [k for k, v in fm.items() if math.dist(v[0][:2], (self.x, self.y)) < 25 and self.t - v[2] > 2]:
+            fm.pop(key, None)          # we're there and it's gone
         for e in self.enemies:
             self.known[e["id"]] = dict(e, t=self.t)
         for k in [k for k, v in self.known.items() if self.t - v["t"] > self.memory]:
