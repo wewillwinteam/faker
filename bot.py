@@ -101,6 +101,23 @@ def salted_hello(hello, salt):
     return h
 
 
+def pick_salt(hello, hy):
+    """The seed salt for this match: hybrid.slot_salts {"<slot>": salt} gives the matches we play from that slot
+    their own salt; every other slot gets hybrid.seed_salt. The practice board replays the same private seeds on
+    every submission and the bot never sees the seed, but the slot varies by match and is in the hello, so a slot is
+    a fixed set of board matches: a salt that gained there can be kept there while every other match plays exactly
+    as before. No table = seed_salt for all."""
+    base = hy.get("seed_salt", 0)
+    try:
+        t = hy.get("slot_salts") or {}
+        s = t.get(str(int(hello.get("slot"))))
+        if s is not None:
+            return int(s)
+    except (TypeError, ValueError, AttributeError):
+        pass
+    return base
+
+
 class Bot:
     name = "2.3%-" + VARIANT
 
@@ -121,7 +138,7 @@ class Bot:
             try:
                 cmd, cwd, env = child_command(self.practice)
                 d = SubprocessDriver(cmd, cwd=cwd, name=self.practice, env=env)
-                if d.spawn(salted_hello(hello, hy.get("seed_salt", 0))):  # start it first: it loads its map while we build ours
+                if d.spawn(salted_hello(hello, pick_salt(hello, hy))):  # start it first: it loads its map while we build ours
                     self.drv = d
             except Exception as e:
                 print("%s driver failed to start: %s" % (self.practice, e), file=sys.stderr)
