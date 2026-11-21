@@ -1,5 +1,6 @@
-"""Mech Royale bot, team 2.3%. Variant S7: practice is driven by the public MIT bot (lance_bot.py, LanceHuang245) until the
-match turns out to be a free-for-all, then our own brain (below) takes over.
+"""Mech Royale bot, team 2.3%. Variant S9: every match is driven by lance_plus.py, our fork of the public MIT bot
+(lance_bot.py, LanceHuang245) with our strategy switches (params.json hybrid.lance_flags). S8 ran plain lance_bot.py.
+The free-for-all handoff to our own brain (below) is off (hybrid.ffa_switch_max_s = 0) but still wired.
 Earlier, variant L: J ("blend": I's awareness + reasoner rules with F's farming) plus the fight read (brain/situation.py:
 run or stay from who has a line on us, who is coming and who wins the trade, never from an HP line), laser kit.
 H was the first agent brain, I added awareness + the reasoner.
@@ -34,8 +35,13 @@ try:
 except Exception as e:
     print("lance_bot import failed:", e, file=sys.stderr)
     lance_bot = None
+try:
+    import lance_plus  # our fork of it, every change behind a switch: see lance_plus.py
+except Exception as e:
+    print("lance_plus import failed:", e, file=sys.stderr)
+    lance_plus = None
 
-VARIANT = "S8"
+VARIANT = "S9"
 
 
 def load_params():
@@ -59,9 +65,17 @@ class Bot:
         # free-for-all (house bots only die to us or the zone; later zone deaths must not flip practice to FFA)
         self.hy = P.get("hybrid", {})
         self.lance = None
-        if lance_bot is not None and self.hy.get("practice") == "lance":
+        drv = self.hy.get("practice")
+        mod = lance_plus if drv == "lance_plus" else (lance_bot if drv == "lance" else None)
+        if drv == "lance_plus" and mod is None:
+            mod = lance_bot  # fork failed to import: plain Lance is still far better than nothing
+        if mod is not None:
             try:
-                self.lance = lance_bot.Bot(hello)
+                self.lance = mod.Bot(hello)
+                if mod is lance_plus:
+                    fl = os.environ.get("MR_FLAGS")  # tests may override the shipped switches
+                    self.lance.flags = set(x for x in (fl if fl is not None else self.hy.get("lance_flags", "")).split(",") if x)
+                print(f"practice driver {mod.__name__} flags {sorted(self.lance.flags)}", file=sys.stderr)
             except Exception as e:
                 print("lance init failed:", e, file=sys.stderr)
         self.ffa_mode = False

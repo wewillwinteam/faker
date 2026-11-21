@@ -679,7 +679,8 @@
   "laser_jump": false
  },
  "hybrid": {
-  "practice": "lance",
+  "practice": "lance_plus",
+  "lance_flags": "jink,arm,focus,range",
   "ffa_switch_max_s": 0
  }
 }
