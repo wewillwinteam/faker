@@ -1,4 +1,6 @@
-"""Mech Royale bot, team 2.3%. Variant L: J ("blend": I's awareness + reasoner rules with F's farming) plus the fight read (brain/situation.py:
+"""Mech Royale bot, team 2.3%. Variant S7: practice is driven by the public MIT bot (lance_bot.py, LanceHuang245) until the
+match turns out to be a free-for-all, then our own brain (below) takes over.
+Earlier, variant L: J ("blend": I's awareness + reasoner rules with F's farming) plus the fight read (brain/situation.py:
 run or stay from who has a line on us, who is coming and who wins the trade, never from an HP line), laser kit.
 H was the first agent brain, I added awareness + the reasoner.
 
@@ -27,7 +29,13 @@ except Exception:
 
 from brain.harness import Harness  # noqa: E402
 
-VARIANT = "M"
+try:
+    import lance_bot  # practice driver (MIT, LanceHuang245): see lance_bot.py
+except Exception as e:
+    print("lance_bot import failed:", e, file=sys.stderr)
+    lance_bot = None
+
+VARIANT = "S7"
 
 
 def load_params():
@@ -45,13 +53,35 @@ class Bot:
                 m = nav.Map(hello["map"]["dir"])
             except Exception as e:
                 print("map load failed:", e, file=sys.stderr)
-        self.h = Harness(hello, m, load_params())
+        P = load_params()
+        self.h = Harness(hello, m, P)
+        # hybrid: who drives while the match looks like practice (house bots), and how late we may still decide it's a
+        # free-for-all (house bots only die to us or the zone; later zone deaths must not flip practice to FFA)
+        self.hy = P.get("hybrid", {})
+        self.lance = None
+        if lance_bot is not None and self.hy.get("practice") == "lance":
+            try:
+                self.lance = lance_bot.Bot(hello)
+            except Exception as e:
+                print("lance init failed:", e, file=sys.stderr)
+        self.ffa_mode = False
 
     def act(self, obs):
-        act, agent, note = self.h.act(obs)
+        act, agent, note = self.h.act(obs)          # our brain always runs, so it knows the match when it takes over
         w = self.h.w
+        if not self.ffa_mode and w.ffa and w.t <= self.hy.get("ffa_switch_max_s", 90):
+            self.ffa_mode = True
+            print(f"free-for-all detected at {w.t:.0f}s: our brain drives", file=sys.stderr)
+        if self.lance is not None and not self.ffa_mode:
+            try:
+                la = self.lance.act(obs)
+                mf.draw.label(f"{VARIANT} practice:lance hp {w.me['hp']:.0f}")
+                return la
+            except Exception as e:
+                print("lance act failed, our brain takes over:", e, file=sys.stderr)
+                self.lance = None
         mf.draw.label(f"{VARIANT}/{self.h.kit_id} {agent} {note} hp {w.me['hp']:.0f} seen{len(w.seen_by)} sh{len(w.shooters)}")
         return act
 
-
-mf.run(Bot)
+if __name__ == "__main__":
+    mf.run(Bot)
