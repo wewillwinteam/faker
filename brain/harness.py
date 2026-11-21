@@ -122,6 +122,12 @@ class Harness:
         return i
 
     def act(self, obs):
+        self.observe(obs)
+        return self.decide(obs)
+
+    def observe(self, obs):
+        """The cheap half of a decision: world model, telemetry, tracker (and sound in a free-for-all). Runs on every
+        observation, also while another driver plays practice, so the FFA detector (w.ffa) stays exact."""
         w = self.w
         w.update(obs)
         me = w.me
@@ -150,6 +156,11 @@ class Harness:
                 w.soundmap.update()
             except Exception as e:
                 self.log("error", agent="sound", err=str(e)[:120])
+
+    def decide(self, obs):
+        """The costly half: stance, reasoner, agent bids, reflexes. Call observe(obs) first."""
+        w = self.w
+        me = w.me
         want, why = self.decide_stance(w)
         w.stance, w.stance_until = self.stance, self.stance_until
         self.mode_p = self.P.get("modes", {}).get("ffa" if w.ffa else "squad", {})
