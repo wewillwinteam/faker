@@ -99,50 +99,59 @@ type Brain struct {
 }
 
 type Params struct {
-	RetreatHP  float64
-	RecoverHP  float64
-	GunRange   float64
-	LightRange float64
-	LaserRange float64
-	EngageDist float64
-	FarmNPC    bool
-	Explore    bool
-	Ghost      bool
-	HomeExpo   float64
-	LootRadius float64
-	CrateUntil float64
-	UseDrops   bool
-	Dodge      bool
-	NoMortar   bool
-	Peek       bool
-	LaserFirst bool
-	CrowdHide  bool
-	Vulture    float64
-	Ambush     float64
-	LaserSeek  float64
-	Lethal     bool
-	Alert      float64
-	Shy        float64
-	EarlyHide  float64
-	Evade      bool
-	Odds       float64
-	OddsFlee   float64
-	Practice   bool
-	Stick      float64
-	HPw        float64
-	LowBonus   float64
-	MaxTarget  float64
-	LoseRule   bool
-	FightLoot  float64
-	FarmHP     float64
-	AllFoes    bool
-	CubeGoal   float64
-	Econ       bool
-	LaserUp    bool
-	EconSafe   float64
-	Opening    bool
-	NanoUp     bool
-	Finish     float64
+	RetreatHP   float64
+	RecoverHP   float64
+	GunRange    float64
+	LightRange  float64
+	LaserRange  float64
+	EngageDist  float64
+	FarmNPC     bool
+	Explore     bool
+	Ghost       bool
+	HomeExpo    float64
+	LootRadius  float64
+	CrateUntil  float64
+	UseDrops    bool
+	Dodge       bool
+	NoMortar    bool
+	Peek        bool
+	LaserFirst  bool
+	CrowdHide   bool
+	Vulture     float64
+	Ambush      float64
+	LaserSeek   float64
+	Lethal      bool
+	Alert       float64
+	Shy         float64
+	EarlyHide   float64
+	Evade       bool
+	Odds        float64
+	OddsFlee    float64
+	Practice    bool
+	Stick       float64
+	HPw         float64
+	LowBonus    float64
+	MaxTarget   float64
+	LoseRule    bool
+	FightLoot   float64
+	FarmHP      float64
+	AllFoes     bool
+	CubeGoal    float64
+	Econ        bool
+	LaserUp     bool
+	EconSafe    float64
+	Opening     bool
+	NanoUp      bool
+	Finish      float64
+	FinishHP    float64
+	FinishRush  bool
+	Pursue      float64
+	FightBoost  float64
+	DodgeBoost  float64
+	ThreatBoost float64
+	SpeedUp     bool
+	Backstab    float64
+	LethalK     float64
 }
 
 func DefaultParams() Params {
@@ -150,7 +159,7 @@ func DefaultParams() Params {
 		Ghost: true, HomeExpo: 120, LootRadius: 90, CrateUntil: 150, UseDrops: false, Dodge: true, NoMortar: true,
 		Peek: true, LaserFirst: false, CrowdHide: true, Practice: true}
 
-	p.Opening = true
+	p.LaserFirst = true
 
 	return p
 }
@@ -448,13 +457,22 @@ var upgradeOrderNano = []string{
 	"mortar_reload", "mortar_splash", "mortar_velocity", "sensors", "jets", "laser_pierce",
 }
 
-func pickUpgrade(of *Offer, laserUp, nanoUp bool) int {
+var upgradeOrderSpeed = []string{
+	"plating", "armor", "servos", "jets", "reactor", "laser_damage", "laser_charge", "nanites", "gun_damage", "gun_rate", "lightning_efficiency", "lightning_range",
+	"gun_mag", "gun_velocity", "gyros", "lightning_chain", "capacitor",
+	"mortar_reload", "mortar_splash", "mortar_velocity", "sensors", "laser_pierce",
+}
+
+func pickUpgrade(of *Offer, laserUp, nanoUp, speedUp bool) int {
 	order := upgradeOrder
 	if laserUp {
 		order = upgradeOrderLaser
 	}
 	if nanoUp {
 		order = upgradeOrderNano
+	}
+	if speedUp {
+		order = upgradeOrderSpeed
 	}
 	best, bestRank := 0, 1<<30
 	for i, c := range of.Choices {
@@ -485,7 +503,7 @@ func (b *Brain) step(o *Obs, act *Action) {
 	hpFrac := me.HP / math.Max(1, me.MaxHP)
 
 	if o.Offer != nil && len(o.Offer.Choices) > 0 {
-		p := pickUpgrade(o.Offer, b.P.LaserUp, b.P.NanoUp)
+		p := pickUpgrade(o.Offer, b.P.LaserUp, b.P.NanoUp, b.P.SpeedUp)
 		act.Pick = &p
 	}
 
@@ -566,6 +584,9 @@ func (b *Brain) step(o *Obs, act *Action) {
 		if b.P.Stick > 0 && t.ID == b.stickID && now-b.stickAt < 2 {
 			s -= b.P.Stick
 		}
+		if b.P.Backstab > 0 && b.showsBack(t, x, y) {
+			s -= b.P.Backstab
+		}
 		if now-t.HitMe < 4 {
 			s -= 40
 		}
@@ -581,6 +602,9 @@ func (b *Brain) step(o *Obs, act *Action) {
 	}
 	foe := target
 	if foe == nil && b.P.Peek {
+		foe = hidden
+	}
+	if foe == nil && b.P.Pursue > 0 && hidden != nil && hidden.HP < b.P.Pursue*hidden.MaxHP {
 		foe = hidden
 	}
 	danger := false
@@ -729,10 +753,17 @@ func (b *Brain) step(o *Obs, act *Action) {
 				}
 			}
 		}
-		if keep := b.P; b.P.Finish > 0 && foe.HP < 0.38*foe.MaxHP && hpFrac > 0.42 && crowd <= 2 {
+		finHP := 0.38
+		if b.P.FinishHP > 0 {
+			finHP = b.P.FinishHP
+		}
+		if keep := b.P; b.P.Finish > 0 && foe.HP < finHP*foe.MaxHP && hpFrac > 0.42 && crowd <= 2 {
 			b.P.GunRange, b.P.LaserRange, b.P.LightRange = b.P.Finish, b.P.Finish, b.P.Finish
 			mx, my = b.fightMove(o, foe, seen, wantLos)
 			b.P = keep
+			if b.P.FinishRush && foe.Dist > 2*b.P.Finish && me.Energy > 30 {
+				boost = true
+			}
 		} else {
 			mx, my = b.fightMove(o, foe, seen, wantLos)
 		}
@@ -740,6 +771,9 @@ func (b *Brain) step(o *Obs, act *Action) {
 			boost = true
 		}
 		mode = "fight"
+		if b.P.FightBoost > 0 && me.Energy > b.P.FightBoost && (laser == nil || laser.Charge <= 0) && (light == nil || me.Energy > 60) {
+			boost = true
+		}
 		if b.P.FightLoot > 0 {
 			r := b.P.FightLoot
 			if hpFrac <= 0.5 {
@@ -822,7 +856,13 @@ func (b *Brain) step(o *Obs, act *Action) {
 			if lz && me.Energy > 25 {
 				boost = true
 			}
+			if b.P.DodgeBoost > 0 && me.Energy > b.P.DodgeBoost {
+				boost = true
+			}
 		}
+	}
+	if b.P.ThreatBoost > 0 && me.Energy > b.P.ThreatBoost && (foe != nil || now-b.lastHurt < 2.5) && (light == nil || me.Energy > 60) {
+		boost = true
 	}
 
 	if mode == "escape" {
@@ -965,7 +1005,14 @@ func (b *Brain) step(o *Obs, act *Action) {
 					if holds(target.Weapons, "mortar") {
 						dmg *= 1 + w.Stats.Cookoff
 					}
-					if dmg*0.8 >= target.HP && math.Abs(angDiff(hy, me.Aim[0])) < tolY*0.9 && math.Abs(hp-me.Aim[1]) < tolP {
+					lk := 0.8
+					if b.P.LethalK > 0 {
+						lk = b.P.LethalK
+					}
+					if b.P.Backstab > 0 && b.showsBack(target, x, y) {
+						dmg *= b.rearMult()
+					}
+					if dmg*lk >= target.HP && math.Abs(angDiff(hy, me.Aim[0])) < tolY*0.9 && math.Abs(hp-me.Aim[1]) < tolP {
 						aim = [2]float64{hy, hp}
 						act.Fire[i] = false
 						break
@@ -1919,7 +1966,13 @@ func squadParams(p Params) Params {
 
 	p.LaserSeek = 240
 	p.LaserUp = true
-	p.Finish = 14
+	p.Lethal = true
+	p.Finish = 20
+	p.Stick = 200
+	p.LowBonus = 200
+	p.LethalK = 0.7
+	p.HPw = 0.15
+	p.HPw = 0.18
 
 	return p
 }
@@ -1930,4 +1983,19 @@ func (b *Brain) cubeCap() int {
 		c = g
 	}
 	return c
+}
+
+func (b *Brain) rearMult() float64 {
+	if m := b.Cfg.Mech.RearMult; m > 1 {
+		return m
+	}
+	return 1
+}
+
+func (b *Brain) showsBack(t *Track, x, y float64) bool {
+	arc := b.Cfg.Mech.FrontArcDeg
+	if arc <= 0 {
+		arc = 180
+	}
+	return math.Abs(angDiff(t.Aim[0], math.Atan2(y-t.Pos[1], x-t.Pos[0]))) > arc*math.Pi/360+0.1
 }
