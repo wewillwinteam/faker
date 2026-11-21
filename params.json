@@ -687,6 +687,6 @@
   "child_ready_s": 10,
   "max_child_fails": 5,
   "fallback_brain_ms": 20,
-  "seed_salt": 1
+  "seed_salt": 0
  }
 }
