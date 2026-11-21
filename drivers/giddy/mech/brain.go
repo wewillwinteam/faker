@@ -146,6 +146,7 @@ type Params struct {
 	FinishHP    float64
 	FinishRush  bool
 	Pursue      float64
+	ArmFirst    bool
 	FightBoost  float64
 	DodgeBoost  float64
 	ThreatBoost float64
@@ -570,6 +571,10 @@ func (b *Brain) step(o *Obs, act *Action) {
 			t.Engage = true
 		case aimed && t.Dist < 190:
 			t.Engage = true
+		}
+		if b.P.ArmFirst && laser == nil && t.Engage && now-t.HitMe >= 6 && !(t.Closing > 2.5 && t.Dist < 250) &&
+			!(aimed && t.Dist < 230) && (holds(t.Weapons, "laser") || t.Dist > 55) {
+			t.Engage = false
 		}
 		if t.Engage && !t.LOS && t.Dist < maxT && (hidden == nil || t.Dist < hidden.Dist) {
 			hidden = t
@@ -1973,6 +1978,7 @@ func squadParams(p Params) Params {
 	p.LethalK = 0.7
 	p.HPw = 0.15
 	p.HPw = 0.18
+	p.ArmFirst = true
 
 	return p
 }
