@@ -680,6 +680,6 @@
  },
  "hybrid": {
   "practice": "lance",
-  "ffa_switch_max_s": 90
+  "ffa_switch_max_s": 0
  }
 }

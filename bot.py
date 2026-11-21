@@ -35,7 +35,7 @@ except Exception as e:
     print("lance_bot import failed:", e, file=sys.stderr)
     lance_bot = None
 
-VARIANT = "S7"
+VARIANT = "S8"
 
 
 def load_params():
