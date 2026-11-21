@@ -565,5 +565,31 @@
       "never_run": false
     }
   },
-  "sound": {}
+  "sound": {},
+  "dodge": {
+    "on": true,
+    "look_s": 0.6,
+    "bullet_r": 4.0,
+    "laser_r": 4.5,
+    "splash_r": 10.0,
+    "weight": 1.2,
+    "boost_energy": 25,
+    "tune": {
+      "weight": [
+        0.6,
+        2.0,
+        0.2
+      ],
+      "bullet_r": [
+        2.5,
+        6.0,
+        0.5
+      ],
+      "look_s": [
+        0.3,
+        1.0,
+        0.1
+      ]
+    }
+  }
 }

@@ -15,6 +15,7 @@ from .reasoner import Reasoner
 from . import situation
 from . import agents as A
 from . import cover as C
+from .dodge import dodge as dodge_reflex
 
 
 class Harness:
@@ -253,5 +254,19 @@ class Harness:
         if name not in ("combat", "escape") and g and g.get("ammo", 12) < 9 and g.get("reload", 0) == 0 and not fire[0]:
             act["reload"] = True
         aim = chosen["aim"] if chosen["aim"] is not None else [me["aim"][0], 0.0]
+        # reflex: dodge bullets, charging-laser lines and mortar landing spots (take less damage)
+        dp = self.P.get("dodge", {})
+        if dp.get("on", True):
+            dv, dwhy = dodge_reflex(w, dp)
+            if dv is not None:
+                k = dp.get("weight", 1.2)
+                mx, my = mv[0] + dv[0] * k, mv[1] + dv[1] * k
+                n = math.hypot(mx, my) or 1.0
+                mv = [mx / n, my / n]
+                if me["energy"] > dp.get("boost_energy", 25):
+                    boost = True
+                if w.tick - getattr(self, "dodge_log_t", -99) > 10:
+                    self.dodge_log_t = w.tick
+                    self.log("dodge", why=dwhy)
         act.update(move=mv, boost=boost, jump=jump, aim=aim, fire=fire)
         return act, name, chosen.get("note", "")
