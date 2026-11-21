@@ -450,10 +450,10 @@
     "fight_close": 70.0,
     "modes": {
       "squad": {
-        "ttk_max": 4.0,
-        "ttk_easy": 1.5,
-        "max_crowd": 0,
-        "quiet_until": 999
+        "ttk_max": 60.0,
+        "ttk_easy": 30.0,
+        "max_crowd": 15,
+        "quiet_until": 0
       },
       "ffa": {
         "ttk_max": 6.0,
@@ -467,9 +467,11 @@
     "squad": {
       "cover_in_fights": true,
       "agents_off": [
+        "cover",
+        "heal",
         "reposition"
       ],
-      "never_run": false
+      "never_run": true
     },
     "ffa": {
       "cover_in_fights": true,
