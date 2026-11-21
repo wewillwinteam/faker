@@ -31,6 +31,7 @@ class Map:
             self._fill(p)
         self._walk_grid()
         self._trees(w)
+        self._roofs()
         self.flow = None
         self.flow_goal = None
         self._job = None
@@ -57,6 +58,51 @@ class Map:
             for gx in (cx - 1, cx, cx + 1):
                 for gy in (cy - 1, cy, cy + 1):
                     self.tgrid.setdefault((gx, gy), []).append(t)
+
+    def _roofs(self):
+        """Flat roofs 8-28 m above the ground with room to stand back from the edge (hidden from below).
+        One spot per 6 m block, kept in a 30 m grid: self.roof_grid[(gx, gy)] -> [(x, y, top)]."""
+        self.roof_grid = {}
+        nx = self.nx
+        tops = {}
+        for k, cs in self.cols.items():
+            j, i = divmod(k, nx)
+            x, y = self.x0 + (i + 0.5) * CELL, self.y0 + (j + 0.5) * CELL
+            g = self.ground(x, y)
+            t = max((tp for b, tp in cs if b <= g + 1.5), default=None)
+            if t is not None and 8.0 <= t - g <= 28.0:
+                tops[k] = t
+        seen = set()
+        for k, t in tops.items():
+            j, i = divmod(k, nx)
+            blk = (i // 3, j // 3)
+            if blk in seen:
+                continue
+            ok = True
+            for dj in (-2, -1, 0, 1, 2):
+                for di in (-2, -1, 0, 1, 2):
+                    t2 = tops.get((j + dj) * nx + (i + di))
+                    if t2 is None or abs(t2 - t) > 0.6:
+                        ok = False
+                        break
+                if not ok:
+                    break
+            if not ok:
+                continue
+            seen.add(blk)
+            x, y = self.x0 + (i + 0.5) * CELL, self.y0 + (j + 0.5) * CELL
+            self.roof_grid.setdefault((int(x // 30), int(y // 30)), []).append((x, y, t))
+
+    def roofs_near(self, x, y, r):
+        out = []
+        gx, gy = int(x // 30), int(y // 30)
+        k = int(r // 30) + 1
+        for a in range(gx - k, gx + k + 1):
+            for b in range(gy - k, gy + k + 1):
+                for s in self.roof_grid.get((a, b), ()):
+                    if (s[0] - x) ** 2 + (s[1] - y) ** 2 <= r * r:
+                        out.append(s)
+        return out
 
     def trees_near(self, x, y):
         return self.tgrid.get((int(x // 20), int(y // 20)), ())

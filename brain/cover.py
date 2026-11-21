@@ -329,3 +329,136 @@ class HoldAgent(Agent):
         else:
             yaw = self.scan
         return self.p["bid"], plan([0.0, 0.0], [yaw, 0.0], note="holding")
+
+
+class ThirdPartyAgent(Agent):
+    """Free-for-all only (wiki: third-party). Listens for a fight (brain/sound.py places each fighter from crossed
+    bearings and sound ranges), flanks to the side of the second party out of both fighters' view, and commits when
+    the timing is right (both locked, one cracked, or one just died) (brain/thirdparty.py)."""
+    name = "thirdparty"
+
+    def propose(self, w):
+        if not w.ffa or getattr(w, "soundmap", None) is None:
+            return None
+        from .thirdparty import third_party_plan
+        plan_ = third_party_plan(w, w.tracker, w.soundmap, self.p)
+        if not plan_:
+            return None
+        tgt = plan_.get("target_side") or {}
+        tx, ty = tgt.get("x", w.x), tgt.get("y", w.y)
+        mv = plan_.get("move") or list(w.goto(*plan_["goal"]))
+        aim = [math.atan2(ty - w.y, tx - w.x), 0.0]
+        fire = [False, False]
+        tid = tgt.get("track_id")
+        e = next((m for m in w.enemies if m["id"] == tid), None) if tid is not None else None
+        if plan_.get("fire_ok") and e is not None:
+            yaw, pitch, tz = lead_aim(w, e)
+            aim = [yaw, pitch]
+            fire[0] = gun_fire_ok(w, e["pos"][0], e["pos"][1], tz, e["_d"], yaw)
+        commit = plan_.get("approach") == "commit"
+        bid = self.p.get("bid_commit", 0.9) if commit else self.p.get("bid", 0.7)
+        if not hasattr(self, "_last") or self._last != plan_.get("approach"):
+            self._last = plan_.get("approach")
+            w.log("third", approach=self._last, why=str(plan_.get("why", ""))[:80], d=round(plan_.get("d_target") or 0))
+        return bid, plan(list(mv), aim, fire, boost=not commit and w.me["energy"] > 40, note="3rd " + str(plan_.get("approach")))
+
+
+class RoofAgent(Agent):
+    """High ground on roofs (owner: take high ground, quick peek so the whole mech isn't showing; rival study: the #2
+    practice bot jets 16-20 m onto roofs when pressed). When the fight read says we lose, or 2+ enemies that know where
+    we are close in, go to a roof within roof_r: walk to it, jump, jet up (boost in the air), stand back from the edge
+    (hidden from below), regen, and peek the edge for at most peek_s to shoot down. Zone forces us off."""
+    name = "roof"
+
+    def __init__(self, p, kit):
+        super().__init__(p, kit)
+        self.spot = None
+        self.since = -99.0
+        self.peek_t = -99.0
+        self.last_peek = -99.0
+
+    def pressed(self, w):
+        rd = getattr(w, "fight_read", None) or {}
+        if rd.get("verdict") == "run" or (rd.get("margin") is not None and rd["margin"] <= 0):
+            return True
+        aware = [tr for tr in w.tracker.near(w.x, w.y, self.p.get("press_r", 150.0), max_age=4.0) if w.tracker.aware(tr, 4.0)]
+        return len(aware) >= self.p.get("press_n", 2)
+
+    def on_roof(self, w):
+        return self.spot is not None and w.z >= self.spot[2] - 0.8 and math.dist(self.spot[:2], (w.x, w.y)) < 6.0
+
+    def propose(self, w):
+        m = w.map
+        if m is None or not getattr(m, "roof_grid", None) or w.zone_urgent or not w.me["in_zone"]:
+            self.spot = None
+            return None
+        if self.spot is None:
+            if not self.pressed(w) or w.me["energy"] < self.p.get("min_energy", 45.0):
+                return None
+            nc, nr = w.zone["next_center"], w.zone["next_radius"]
+            best, bs = None, 1e9
+            for s in m.roofs_near(w.x, w.y, self.p.get("roof_r", 45.0)):
+                if s[2] - w.z < 6.0 or math.dist(s[:2], nc) > nr * 0.9:
+                    continue
+                c = math.dist(s[:2], (w.x, w.y)) + (s[2] - w.z) * 0.5
+                if c < bs:
+                    best, bs = s, c
+            if best is None:
+                return None
+            self.spot, self.since = best, w.t
+            w.log("roof", x=round(best[0]), y=round(best[1]), top=round(best[2], 1))
+        sx, sy, top = self.spot
+        d = math.dist((sx, sy), (w.x, w.y))
+        if not self.on_roof(w):
+            if w.t - self.since > self.p.get("climb_s", 10.0):    # couldn't get up: give it up
+                w.log("roof_fail", held=round(w.t - self.since, 1))
+                self.spot = None
+                return None
+            mv = list(unit(sx - w.x, sy - w.y))
+            jump = w.me["grounded"] and d < self.p.get("jump_d", 14.0)
+            boost = (not w.me["grounded"]) and w.z < top + 1.5 or (w.me["grounded"] and d > 14 and w.me["energy"] > 60)
+            aim = [w.threat_yaw, 0.0] if w.threat_yaw is not None else None
+            fire = [False, False]
+            if w.enemies:                       # M-006: never climb under fire without shooting back
+                e = w.enemies[0]
+                yaw, pitch, tz = lead_aim(w, e)
+                aim = [yaw, pitch]
+                fire[0] = gun_fire_ok(w, e["pos"][0], e["pos"][1], tz, e["_d"], yaw)
+            return self.p["bid"], plan(mv, aim, fire, boost=boost, jump=jump, note="to roof")
+        # on the roof: stand back from the edge, regen, peek the edge toward a target to shoot
+        if w.t - self.since > self.p.get("hold_s", 45.0) and not self.pressed(w):
+            w.log("roof_end", held=round(w.t - self.since, 1))
+            self.spot = None
+            return None
+        tgt = None
+        for e in w.enemies:
+            tgt = e
+            break
+        if tgt is None:
+            best = 1e9
+            for tr in w.tracker.tracks.values():
+                tx, ty, unc, age = w.tracker.est(tr)
+                dd = math.hypot(tx - w.x, ty - w.y)
+                if age < 6 and dd < best:
+                    best, tgt = dd, {"id": tr["id"], "pos": [tx, ty, top - 10], "vel": [0, 0, 0], "aim": [0, 0], "_d": dd, "guess": True}
+        if tgt is None:
+            return self.p["bid"], plan(list(unit(sx - w.x, sy - w.y)) if d > 1.5 else [0.0, 0.0], None, note="roof: hold")
+        ex, ey = tgt["pos"][0], tgt["pos"][1]
+        yaw, pitch, tz = lead_aim(w, tgt)
+        peeking = w.t - self.peek_t < self.p.get("peek_s", 1.2)
+        if not peeking and w.t - self.last_peek > self.p.get("peek_gap", 1.5):
+            self.peek_t = self.last_peek = w.t
+            peeking = True
+        sec = w.weapons[1]
+        laser = sec is not None and sec["kind"] == "laser"
+        line = w.los(w.muz, (ex, ey, tz))
+        if peeking:
+            mv = list(unit(ex - w.x, ey - w.y)) if not line else [0.0, 0.0]
+            f0 = line and gun_fire_ok(w, ex, ey, tz, tgt["_d"], yaw) and not tgt.get("guess")
+            full = laser and (sec.get("charge") or 0) >= (sec.get("stats") or {}).get("charge", 0.75) - 0.01
+            err = abs(ang_diff(w.me["aim"][0], yaw))
+            f1 = laser and not (full and line and err < math.atan2(2.2, max(tgt["_d"], 1.0)) + 0.02)
+            return self.p["bid"], plan(mv, [yaw, pitch], [f0, f1], note="roof: peek")
+        back = list(unit(sx - w.x, sy - w.y)) if d > 1.5 else [0.0, 0.0]
+        charge = laser and sec.get("cooldown", 0) == 0
+        return self.p["bid"], plan(back, [yaw, pitch], [False, charge], note="roof: back from edge")

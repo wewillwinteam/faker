@@ -28,7 +28,13 @@ class Harness:
         self.reasoner = Reasoner(params["reasoner"])
         self.w.tracker, self.w.reasoner = self.tracker, self.reasoner
         self.w.intent = {}
-        self.agents = [cls(params["agents"][cls.name], self.kit) for cls in A.ALL + [C.CoverAgent, C.HealAgent, C.MoveAfterKillAgent, C.HoldAgent]]
+        try:
+            from .sound import SoundMap
+            self.w.soundmap = SoundMap(self.w, self.tracker, params.get("sound", {}))
+        except Exception as e:
+            self.w.soundmap = None
+            self.log("error", agent="sound", err=str(e)[:120])
+        self.agents = [cls(params["agents"][cls.name], self.kit) for cls in A.ALL + [C.CoverAgent, C.HealAgent, C.MoveAfterKillAgent, C.HoldAgent, C.ThirdPartyAgent, C.RoofAgent]]
         self.cur = None
         self.sticky = params.get("harness", {}).get("sticky", 0.08)
         self.upg_taken = []
@@ -138,6 +144,11 @@ class Harness:
         self.was_seen = seen
 
         self.tracker.update()
+        if w.ffa and w.soundmap is not None:
+            try:
+                w.soundmap.update()
+            except Exception as e:
+                self.log("error", agent="sound", err=str(e)[:120])
         want, why = self.decide_stance(w)
         w.stance, w.stance_until = self.stance, self.stance_until
         self.mode_p = self.P.get("modes", {}).get("ffa" if w.ffa else "squad", {})
@@ -169,6 +180,8 @@ class Harness:
                 bid += self.sticky
             if self.stance == "run" and ag.name == "cover":
                 bid += 1.0
+            if ag.name == "roof" and r is not None:
+                bid += 1.1          # high ground beats everything but the zone once we're pressed or up there
             if self.stance == "run" and ag.name == "escape":
                 bid += 0.8          # fallback only: cover had no post
             if self.stance == "stay" and ag.name == "combat":
