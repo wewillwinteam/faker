@@ -56,6 +56,32 @@ def lead_aim(w, e):
     return math.atan2(py - w.y, px - w.x), math.atan2(tz - w.muz[2], max(d, 1.0)), tz
 
 
+def keep_in_front(w, e):
+    """Mistake M-005 (flanked): with a second threat behind or beside us, slide off the line between the two so
+    both end up inside our front arc. Returns a unit move (0, 0 if nothing to fix)."""
+    ex, ey = e["pos"][0], e["pos"][1]
+    fy = math.atan2(ey - w.y, ex - w.x)
+    worst, wa = None, 1.2
+    for tr in w.tracker.tracks.values():
+        if tr["id"] == e["id"] or w.t - tr["seen_t"] > 4.0:
+            continue
+        tx, ty, unc, age = w.tracker.est(tr)
+        if math.hypot(tx - w.x, ty - w.y) > 160:
+            continue
+        a = abs(ang_diff(math.atan2(ty - w.y, tx - w.x), fy))
+        if a > wa:
+            worst, wa = (tx, ty), a
+    if worst is None:
+        return 0.0, 0.0
+    tx, ty = worst
+    mx, my = (ex + tx) / 2, (ey + ty) / 2
+    lx, ly = unit(tx - ex, ty - ey)
+    nx, ny = -ly, lx
+    if (w.x - mx) * nx + (w.y - my) * ny < 0:
+        nx, ny = -nx, -ny
+    return nx, ny
+
+
 def secondary_fire(w, e, d, yaw, aim, tol):
     """Fire control for slot 1. Returns (fire1, aim)."""
     sec = w.weapons[1]
@@ -249,7 +275,19 @@ class CombatAgent(Agent):
             s = 1.0 if ang_diff(math.atan2(w.y - ey, w.x - ex), e["aim"][0]) > 0 else -1.0
         radial = -0.6 if d < prefer * 0.6 else (0.6 if d > prefer * 1.3 else 0.0)
         zv = w.goto(*w.zone["next_center"]) if (w.zone_urgent or w.zone_edge) else (0.0, 0.0)
-        mv = [-uy * s * 0.85 + ux * radial + zv[0] * 0.6, ux * s * 0.85 + uy * radial + zv[1] * 0.6]
+        cv = (0.0, 0.0)
+        if w.tick % 10 == 0 or not hasattr(self, "duel_cover"):
+            th = [x for x in w.recent if not x.get("ghost")][:3] or [e]
+            self.duel_cover = w.find_cover(th, max_r=60.0)
+        if getattr(self, "duel_cover", None) is not None and w.sec != "lightning":
+            cx, cy = self.duel_cover
+            if math.dist((cx, cy), (w.x, w.y)) > 3:
+                cv = unit(cx - w.x, cy - w.y)     # work toward cover while trading, never turn our back
+        kx, ky = keep_in_front(w, e)
+        if kx or ky:
+            s = 1.0 if (-uy * kx + ux * ky) > 0 else -1.0      # strafe the way that brings the flanker in front
+        mv = [-uy * s * 0.85 + ux * radial + zv[0] * 0.6 + cv[0] * 0.9 + kx * 0.8,
+              ux * s * 0.85 + uy * radial + zv[1] * 0.6 + cv[1] * 0.9 + ky * 0.8]
         boost = w.sec == "lightning" and d > prefer and w.me["energy"] > 35
         if not w.me["in_zone"]:
             mv, boost = [zv[0] - uy * s * 0.3, zv[1] + ux * s * 0.3], w.me["energy"] > 25

@@ -30,9 +30,87 @@ class Map:
         for p in w["prisms"]:
             self._fill(p)
         self._walk_grid()
+        self._trees(w)
         self.flow = None
         self.flow_goal = None
         self._job = None
+
+    # ---------- trees (vision only: crowns fade sight, trunks stop it; shots ignore trees)
+    def _trees(self, w):
+        tr = w.get("trees") or {}
+        f = tr.get("fields") or []
+        data = tr.get("data") or []
+        rules = w.get("rules") or {}
+        self.canopy_density = rules.get("canopyDensity", 0.35)
+        self.canopy_block_t = rules.get("canopyBlockT", 0.25)
+        self.tgrid = {}
+        if not f:
+            return
+        n = len(f)
+        ix = {k: i for i, k in enumerate(f)}
+        for i in range(0, len(data) - n + 1, n):
+            r = data[i:i + n]
+            z = r[ix["z"]]
+            t = (r[ix.get("crownX", ix["x"])], r[ix.get("crownY", ix["y"])], r[ix["crownR"]], z + r[ix["crownBase"]],
+                 z + r[ix["height"]], r[ix["x"]], r[ix["y"]], r[ix["trunkR"]], z)
+            cx, cy = int(t[0] // 20), int(t[1] // 20)
+            for gx in (cx - 1, cx, cx + 1):
+                for gy in (cy - 1, cy, cy + 1):
+                    self.tgrid.setdefault((gx, gy), []).append(t)
+
+    def trees_near(self, x, y):
+        return self.tgrid.get((int(x // 20), int(y // 20)), ())
+
+    def under_canopy(self, x, y):
+        for t in self.trees_near(x, y):
+            if (x - t[0]) ** 2 + (y - t[1]) ** 2 < t[2] * t[2]:
+                return True
+        return False
+
+    def tree_sight(self, a, b):
+        """True if trees let a see b: crown path length L gives T = exp(-density * L), blocked under canopyBlockT;
+        a trunk on the line blocks. An estimate of the game's rule (its exact formula is not published)."""
+        if not self.tgrid:
+            return True
+        ax, ay, az = a
+        bx, by, bz = b
+        dx, dy, dz = bx - ax, by - ay, bz - az
+        L2 = dx * dx + dy * dy
+        if L2 < 1e-6:
+            return True
+        L = math.sqrt(L2)
+        seen = set()
+        path = 0.0
+        steps = int(L // 15) + 1
+        for k in range(steps + 1):
+            px, py = ax + dx * k / steps, ay + dy * k / steps
+            for t in self.trees_near(px, py):
+                if id(t) in seen:
+                    continue
+                seen.add(id(t))
+                # trunk: closest approach to the trunk axis within the trunk's height
+                u = ((t[5] - ax) * dx + (t[6] - ay) * dy) / L2
+                if 0.0 < u < 1.0:
+                    qx, qy, qz = ax + dx * u, ay + dy * u, az + dz * u
+                    if (qx - t[5]) ** 2 + (qy - t[6]) ** 2 < t[7] * t[7] and t[8] <= qz <= t[3]:
+                        return False
+                # crown: chord through the crown circle, kept where the line is between crown base and top
+                u = ((t[0] - ax) * dx + (t[1] - ay) * dy) / L2
+                qx, qy = ax + dx * u, ay + dy * u
+                h2 = t[2] * t[2] - ((qx - t[0]) ** 2 + (qy - t[1]) ** 2)
+                if h2 <= 0:
+                    continue
+                half = math.sqrt(h2) / L
+                u0, u1 = max(0.0, u - half), min(1.0, u + half)
+                if u1 <= u0:
+                    continue
+                z0, z1 = az + dz * u0, az + dz * u1
+                lo, hi = max(min(z0, z1), t[3]), min(max(z0, z1), t[4])
+                if hi <= lo and not (t[3] <= z0 <= t[4]):
+                    continue
+                frac = 1.0 if abs(z1 - z0) < 1e-6 else max(0.0, min(1.0, (hi - lo) / abs(z1 - z0)))
+                path += (u1 - u0) * L * frac
+        return math.exp(-self.canopy_density * path) >= self.canopy_block_t
 
     # ---------- terrain
     def ground(self, x, y):

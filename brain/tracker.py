@@ -29,6 +29,10 @@ class Tracker:
                       role=role(e), heard=False, unc0=2.0)
             if w.sees(e, w.x, w.y, w.z, near_pad=0.0, cone_pad=0.0):
                 tr["aware_t"] = t
+            try:
+                tr["trees"] = bool(w.map is not None and w.map.under_canopy(e["pos"][0], e["pos"][1]))
+            except Exception:
+                tr["trees"] = False
             self.tracks[i] = tr
         # mechs that shot us from out of sight (the world model drops a ghost along the bearing)
         for i, v in w.known.items():
@@ -81,6 +85,9 @@ class Tracker:
     def est(self, tr):
         """(x, y, uncertainty m, age s) of where the track is now."""
         age = self.w.t - tr["seen_t"]
+        if tr.get("trees"):      # went into canopy: it hides, it doesn't vanish; it moves slowly in there
+            dt = min(age, 2.0)
+            return tr["x"] + tr["vx"] * dt, tr["y"] + tr["vy"] * dt, tr.get("unc0", 2.0) + 2.5 * age, age
         dt = min(age, 6.0)
         return tr["x"] + tr["vx"] * dt, tr["y"] + tr["vy"] * dt, tr.get("unc0", 2.0) + 5.0 * age, age
 

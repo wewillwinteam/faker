@@ -1,9 +1,15 @@
-"""Fight read: should we run or stay? Decided from the awareness picture, not from an HP line.
+"""Fight read: stay and fight, or take cover? Decided from the awareness picture, never from an HP line.
 
-It plays the fight forward in a few lines: everyone with a line on us shoots, enemies that know where we are and are
-close (join_r) join halfway through, and we kill them one at a time, quickest first. If we die before the last one
-does, or we win with almost no margin (win_margin), the read is 'lose' and the mech runs. An attacker we cannot see at
-all is always a 'run': we cannot win a fight we cannot aim at.
+It plays the fight forward: everyone with a line on us shoots, enemies that know where we are and are close
+(join_r) join after their travel time, and we kill them one at a time, quickest first.
+
+Mistake M-001 (variant L ran from even fights and died with its back turned, 14 of 14 mech deaths mid-run):
+  - we win, or it's close            -> STAY and fight
+  - we lose, cover reachable in time -> RUN = go to cover and fight from its side (brain/cover.py), never flee open
+  - we lose, no cover in reach       -> STAY: turning our back is worse than trading
+  - 3+ with a line and cover near    -> RUN to cover
+  - hit by someone we can't see      -> RUN to cover facing the shot, if cover is near; else stay and turn to it
+"Reachable in time" = we get there before half the time it takes them to kill us (38 m; 60 m tested worse: 1.17 vs 1.38 over 96).
 
 Enemy damage is guessed from what each one carries (house bots: sniper = laser, brawler = lightning or mortar,
 hunter = gun)."""
@@ -27,17 +33,35 @@ def enemy_dps(weapons, d):
     return total
 
 
+def cover_reach(w, threats, t_die):
+    """(cover point or None, seconds to get there). Cover counts only if we get there before half of t_die."""
+    if not threats:
+        return None, 0.0
+    c = w.find_cover(threats[:3], max_r=38.0)
+    if c is None:
+        return None, 0.0
+    spd = 19.5 if w.me["energy"] > 20 else w.walk
+    tr = math.dist(c, (w.x, w.y)) / max(spd, 1.0)
+    return (c if tr < 0.5 * t_die else None), tr
+
+
 def read(w, trk, reasoner, p):
-    """-> dict(verdict 'run'|'stay'|None, why, margin, shooters, joining)."""
+    """-> dict(verdict 'run'|'stay'|None, why, margin, shooters, joining, cover)."""
     sh = list(w.shooters)
     hit_recently = w.t - w.dmg_t < 2.0
     if not w.alerted or not (sh or hit_recently):
         return {"verdict": None, "why": "no one on us", "margin": None, "shooters": 0, "joining": 0}
     seen = [e for e in sh if not e.get("ghost")]
+    hp = w.me["hp"]
     if not seen:
-        return {"verdict": "run", "why": "hit by someone we can't see", "margin": 0.0, "shooters": len(sh), "joining": 0}
+        ghosts = [e for e in sh if e.get("ghost")]
+        c, tr = cover_reach(w, ghosts, hp / 150.0)
+        if c is not None:
+            return {"verdict": "run", "why": "hit by someone we can't see: to cover, facing it", "margin": 0.0,
+                    "shooters": len(sh), "joining": 0, "cover": True}
+        return {"verdict": "stay", "why": "hit by someone we can't see, no cover near: turn and find it", "margin": 0.0,
+                "shooters": len(sh), "joining": 0, "cover": False}
     ids = {e.get("id") for e in seen}
-    # enemies that know where we are and are close enough to join in
     joining = []
     for tr in trk.near(w.x, w.y, p.get("join_r", 120.0), max_age=4.0):
         if tr["id"] in ids or not trk.aware(tr, 4.0):
@@ -54,27 +78,30 @@ def read(w, trk, reasoner, p):
         k = reasoner.ttk(w, tr, d, False)
         fighters.append({"ttk": (k if k is not None else 99.0) + 1.0, "dps": enemy_dps(tr.get("weapons"), d) * p.get("join_w", 0.5),
                          "join": min(4.0, d / 12.0)})
-    # play it forward: kill quickest first, take damage from everyone still up (joiners after their travel time)
-    hp = w.me["hp"]
+    incoming_now = sum(f["dps"] for f in fighters if f["join"] == 0.0)
+    t_die = hp / max(1.0, incoming_now)
+    left = hp
     t = 0.0
     order = sorted(fighters, key=lambda f: f["ttk"])
     alive = list(order)
     for f in order:
         dt = f["ttk"]
         inc = sum(g["dps"] * max(0.0, min(dt, t + dt - g["join"])) / dt for g in alive if dt > 0)
-        hp -= inc * dt
+        left -= inc * dt
         t += dt
         alive.remove(f)
-        if hp <= 0:
+        if left <= 0:
             break
-    margin = hp / max(1.0, w.me["max_hp"])
-    need = p.get("win_margin", 0.15)
-    if hp <= 0:
-        verdict, why = "run", "we lose this: %d on us, %d coming" % (len(seen), len(joining))
-    elif margin < need:
-        verdict, why = "run", "too close to call: %d on us, %d coming" % (len(seen), len(joining))
-    elif len(sh) >= p.get("min_shooters", 3):
-        verdict, why = "run", "%d have a line on us" % len(sh)
+    margin = left / max(1.0, w.me["max_hp"])
+    c, t_reach = cover_reach(w, seen, t_die)
+    n = len(seen)
+    if left <= 0 and c is not None:
+        verdict, why = "run", "we lose this in the open (%d on us, %d coming): fight from cover" % (n, len(joining))
+    elif left <= 0:
+        verdict, why = "stay", "we lose this, but no cover in reach: trade, don't turn our back"
+    elif len(sh) >= p.get("min_shooters", 3) and c is not None:
+        verdict, why = "run", "%d have a line on us: to cover" % len(sh)
     else:
-        verdict, why = "stay", "we win this: %d on us, %d coming" % (len(seen), len(joining))
-    return {"verdict": verdict, "why": why, "margin": round(margin, 2), "shooters": len(sh), "joining": len(joining)}
+        verdict, why = "stay", ("we win this: %d on us, %d coming" if margin > 0.15 else "close, but we stay: %d on us, %d coming") % (n, len(joining))
+    return {"verdict": verdict, "why": why, "margin": round(margin, 2), "shooters": len(sh), "joining": len(joining),
+            "cover": c is not None}

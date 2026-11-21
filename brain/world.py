@@ -47,6 +47,7 @@ class World:
         self.unexplained = 0
         self.ffa = False
         self.events = []
+        self._tree_cache = {}
 
     # ---------------------------------------------------------------- geometry
     def los(self, a, b):
@@ -97,9 +98,32 @@ class World:
         d = math.hypot(dx, dy)
         if d > self.vrange + 5:
             return False
-        if d > self.near + near_pad and abs(ang_diff(math.atan2(dy, dx), e["aim"][0])) > self.fov_half + cone_pad:
+        far = d > self.near + near_pad
+        if far and abs(ang_diff(math.atan2(dy, dx), e["aim"][0])) > self.fov_half + cone_pad:
             return False
-        return self.los((ex, ey, ez + EYE), (px, py, pz + CHEST))
+        a, b = (ex, ey, ez + EYE), (px, py, pz + CHEST)
+        if not self.los(a, b):
+            return False
+        return self.tree_sight(a, b, far)
+
+    def tree_sight(self, a, b, far=True):
+        """Trees: trunks always block sight; canopy only beyond 45 m (proximity sensors ignore canopy)."""
+        if self.map is None or not getattr(self.map, "tgrid", None):
+            return True
+        if not far:
+            return True
+        key = (int(a[0] // 4), int(a[1] // 4), int(a[2] // 4), int(b[0] // 4), int(b[1] // 4), int(b[2] // 4))
+        c = self._tree_cache
+        if key in c:
+            return c[key]
+        try:
+            v = self.map.tree_sight(a, b)
+        except Exception:
+            v = True
+        if len(c) > 4000:
+            c.clear()
+        c[key] = v
+        return v
 
     def has_line(self, e, px, py, pz, rng=230.0):
         ex, ey, ez = e["pos"]
@@ -117,6 +141,8 @@ class World:
             return 0.95
         if d > self.vrange:
             return 0.03
+        if not self.tree_sight((ex, ey, ez + EYE), (px, py, pz + CHEST)):
+            return 0.05          # dense canopy between us: concealed (shots still pass)
         off = abs(ang_diff(math.atan2(py - ey, px - ex), e["aim"][0]))
         if off <= self.fov_half:
             return 0.9
@@ -178,7 +204,7 @@ class World:
             px, py, pz = self.predict(e)
             pts.append((e, (e["pos"][0], e["pos"][1], e["pos"][2] + EYE), (px, py, pz + EYE)))
         best, bs = None, 1e9
-        for r in (12.0, 24.0, 38.0):
+        for r in (12.0, 24.0, 38.0, 50.0, 60.0):
             if r > max_r:
                 break
             for k in range(12):

@@ -14,6 +14,7 @@ from .tracker import Tracker
 from .reasoner import Reasoner
 from . import situation
 from . import agents as A
+from . import cover as C
 
 
 class Harness:
@@ -27,7 +28,7 @@ class Harness:
         self.reasoner = Reasoner(params["reasoner"])
         self.w.tracker, self.w.reasoner = self.tracker, self.reasoner
         self.w.intent = {}
-        self.agents = [cls(params["agents"][cls.name], self.kit) for cls in A.ALL]
+        self.agents = [cls(params["agents"][cls.name], self.kit) for cls in A.ALL + [C.CoverAgent, C.HealAgent, C.MoveAfterKillAgent]]
         self.cur = None
         self.sticky = params.get("harness", {}).get("sticky", 0.08)
         self.upg_taken = []
@@ -45,6 +46,7 @@ class Harness:
         self.stance_why = ""
         self.calm_since = None
         self.think_t = -99.0
+        self.mode_p = {}
         self.tel = None
         d = os.environ.get("MECH_TELEMETRY")
         if d:
@@ -71,6 +73,8 @@ class Harness:
         read that turns badly against us (lost outright, or new enemies joined) can turn 'stay' into 'run' early."""
         esc = self.P["agents"]["escape"]
         rd = situation.read(w, self.tracker, self.reasoner, esc)
+        if self.mode_p.get("never_run") and rd.get("verdict") == "run":
+            rd = dict(rd, verdict="stay", why="this mode never leaves a fight: " + rd["why"])
         w.fight_read = rd
         want, why = rd["verdict"], rd["why"]
         # calm: clear the stance after 1.5 s with no threat and no lock
@@ -136,6 +140,7 @@ class Harness:
         self.tracker.update()
         want, why = self.decide_stance(w)
         w.stance, w.stance_until = self.stance, self.stance_until
+        self.mode_p = self.P.get("modes", {}).get("ffa" if w.ffa else "squad", {})
         R, changed = self.reasoner.decide(w, self.tracker, self.stance)
         w.intent = R
         if changed:
@@ -144,8 +149,11 @@ class Harness:
         # agents bid, the harness picks; the locked stance outranks everyone else
         best, bp = None, None
         bids = {}
+        off = set(self.mode_p.get("agents_off", []))
         for ag in self.agents:
             if self.stance == "stay" and ag.name == "escape":
+                continue
+            if ag.name in off:          # this mode doesn't use that tactic (measured, see wiki/experiments)
                 continue
             try:
                 r = ag.propose(w)
@@ -158,10 +166,14 @@ class Harness:
             bids[ag.name] = round(bid, 2)
             if ag.name == self.cur:
                 bid += self.sticky
-            if self.stance == "run" and ag.name == "escape":
+            if self.stance == "run" and ag.name == "cover":
                 bid += 1.0
+            if self.stance == "run" and ag.name == "escape":
+                bid += 0.8          # fallback only: cover had no post
             if self.stance == "stay" and ag.name == "combat":
                 bid += 0.5
+            if self.stance == "stay" and ag.name == "cover" and self.mode_p.get("cover_in_fights", True):
+                bid += 0.6          # a fight at range with cover near: fight from its side
             if bp is None or bid > bp:
                 best, bp, chosen = ag, bid, p
         if best is None:
@@ -179,7 +191,7 @@ class Harness:
                      bids=bids, hp=round(me["hp"]), seen=len(w.seen_by), sh=len(w.shooters),
                      p=round(w.p_undetected(w.x, w.y, w.z), 2), note=chosen.get("note", ""), sec=w.sec,
                      intent=R["intent"], reason=R["why"], focus=R["focus"], ttk=R["ttk"], fire_ok=R["fire_ok"],
-                     tracks=self.tracker.view(), read=getattr(w, "fight_read", None))
+                     tracks=self.tracker.view(), read=getattr(w, "fight_read", None), mode="ffa" if w.ffa else "squad")
 
         act = {"tick": w.tick}
         if obs["offer"]:

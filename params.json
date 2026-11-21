@@ -1,6 +1,6 @@
 {
   "_note": "Mech brain settings. The evaluator (projects/mech-royale/tools/evaluator) tunes the numbers under agents.* inside their 'tune' ranges and keeps a change only when the score holds. kit picks the loadout.",
-  "kit": "laser",
+  "kit": "veteran",
   "kits": {
     "shock": {
       "name": "Shock assassin",
@@ -138,6 +138,42 @@
         "lightning_chain"
       ],
       "strike": "close"
+    },
+    "veteran": {
+      "name": "Veteran: laser + gun, HP to outlast the final zone",
+      "secondary": [
+        "laser",
+        "lightning",
+        "mortar"
+      ],
+      "upgrades": [
+        "plating",
+        "armor",
+        "laser_damage",
+        "plating",
+        "armor",
+        "nanites",
+        "laser_charge",
+        "plating",
+        "armor",
+        "laser_damage",
+        "gun_damage",
+        "nanites",
+        "laser_damage",
+        "gun_rate",
+        "sensors",
+        "servos",
+        "laser_charge",
+        "gyros",
+        "gun_damage",
+        "gun_rate",
+        "reactor",
+        "capacitor",
+        "jets",
+        "gun_mag",
+        "gun_velocity"
+      ],
+      "strike": "far"
     }
   },
   "agents": {
@@ -272,6 +308,61 @@
     },
     "drift": {
       "bid": 0.1
+    },
+    "cover": {
+      "bid": 0.95,
+      "cover_r": 38.0,
+      "min_range": 45.0,
+      "ground_hold_s": 8.0,
+      "high_hold_s": 30.0,
+      "peek_s": 1.2,
+      "hide_s": 0.9,
+      "away_rad": 1.2,
+      "away_s": 1.0,
+      "tune": {
+        "ground_hold_s": [
+          3.0,
+          15.0,
+          1.0
+        ],
+        "hide_s": [
+          0.5,
+          2.0,
+          0.25
+        ],
+        "min_range": [
+          30.0,
+          90.0,
+          10.0
+        ],
+        "away_s": [
+          0.5,
+          2.5,
+          0.5
+        ]
+      }
+    },
+    "heal": {
+      "bid": 0.75,
+      "heal_frac": 0.75,
+      "tune": {
+        "heal_frac": [
+          0.5,
+          0.9,
+          0.05
+        ]
+      }
+    },
+    "reposition": {
+      "bid": 0.7,
+      "move_s": 3.0,
+      "tune": {
+        "move_s": [
+          1.0,
+          5.0,
+          1.0
+        ]
+      }
     }
   },
   "harness": {
@@ -325,6 +416,36 @@
         10.0
       ]
     },
-    "fight_close": 70.0
+    "fight_close": 70.0,
+    "modes": {
+      "squad": {
+        "ttk_max": 60.0,
+        "ttk_easy": 30.0,
+        "max_crowd": 15,
+        "quiet_until": 0
+      },
+      "ffa": {
+        "ttk_max": 6.0,
+        "ttk_easy": 2.0,
+        "max_crowd": 1,
+        "quiet_until": 30
+      }
+    }
+  },
+  "modes": {
+    "squad": {
+      "cover_in_fights": true,
+      "agents_off": [
+        "cover",
+        "heal",
+        "reposition"
+      ],
+      "never_run": true
+    },
+    "ffa": {
+      "cover_in_fights": true,
+      "agents_off": [],
+      "never_run": false
+    }
   }
 }

@@ -49,13 +49,15 @@ class Reasoner:
         best = None
         for d in (25, 35, 44, 55, 70, 90, 110, 140, 170, 200):
             k = self.ttk(w, tr, d, rear)
-            if k is not None and k <= self.p["ttk_max"] * 0.85:
+            if k is not None and k <= getattr(self, "cur_p", self.p)["ttk_max"] * 0.85:
                 best = d
         return best
 
     # ------------------------------------------------------------------ decide
     def decide(self, w, trk, stance):
-        p = self.p
+        # practice (squad) and free-for-all play differently: modes.<squad|ffa> overrides the base numbers
+        p = dict(self.p, **self.p.get("modes", {}).get("ffa" if w.ffa else "squad", {}))
+        self.cur_p = p
         t = w.t
         intent, why, focus, ttk, fire_ok = "rotate", "", None, None, False
         visible = {e["id"]: e for e in w.enemies}
@@ -74,11 +76,14 @@ class Reasoner:
             return d, behind, unaware, k, crowd
 
         if stance == "run":
-            intent, why = "get out", "the stance lock says run"
+            intent, why = "get out", "the fight read says: to cover, fight from its side"
         elif w.alerted and w.shooters:
             shooters = [e for e in w.shooters if e["id"] in visible] or [e for e in w.enemies if e["_d"] < 120]
             if shooters:
-                if self.focus not in [e["id"] for e in shooters]:
+                rear_by = [ev.get("by") for ev in w.events if ev["type"] == "damaged" and ev.get("rear") and ev.get("by") in visible]
+                if rear_by:                     # M-005: whoever hits us from behind becomes the focus
+                    self.focus = rear_by[-1]
+                elif self.focus not in [e["id"] for e in shooters]:
                     self.focus = min(shooters, key=lambda e: (look(e)[3] or 99))["id"]
                 e = visible.get(self.focus)
                 if e is not None:

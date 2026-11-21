@@ -27,7 +27,7 @@ except Exception:
 
 from brain.harness import Harness  # noqa: E402
 
-VARIANT = "L"
+VARIANT = "M"
 
 
 def load_params():
