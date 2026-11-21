@@ -291,6 +291,14 @@ class World:
         # enemies: visible now, plus memory
         self.enemies = [m for m in obs["mechs"] if m["kind"] == "mech"]
         self.npcs = [m for m in obs["mechs"] if m["kind"] == "npc"]
+        pm = self.__dict__.setdefault("pickup_mem", {})
+        for p in obs.get("pickups") or []:
+            pm[p["id"]] = (p["pos"], p["kind"], self.t)
+        for ev in obs["events"]:
+            if ev["type"] in ("took", "take_failed"):
+                pm.pop(ev.get("id"), None)
+        for key in [k for k, v in pm.items() if math.dist(v[0][:2], (self.x, self.y)) < 6 and self.t - v[2] > 1.0]:
+            pm.pop(key, None)          # stood on its spot and it's not there: gone
         fm = self.__dict__.setdefault("farm_mem", {})
         for n in self.npcs:
             fm[("n", n["id"])] = (n["pos"], "npc", self.t)

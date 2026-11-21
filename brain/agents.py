@@ -296,6 +296,21 @@ class CombatAgent(Agent):
             cx, cy = self.duel_cover
             if math.dist((cx, cy), (w.x, w.y)) > 3:
                 cv = unit(cx - w.x, cy - w.y)     # work toward cover while trading, never turn our back
+        if w.mode_p.get("gun_followup"):
+            for ev in w.events:
+                if ev["type"] == "hit" and ev.get("weapon") in ("laser", "mortar") and ev.get("target") == e["id"]:
+                    side = abs(ang_diff(math.atan2(w.y - ey, w.x - ex), e["aim"][0])) > 1.0
+                    if side or ev.get("rear"):
+                        self.follow_until, self.follow_id = w.t + 1.6, e["id"]
+            if w.t < getattr(self, "follow_until", -1) and getattr(self, "follow_id", None) == e["id"] and g and g.get("reload", 0) == 0:
+                if abs(ang_diff(w.me["aim"][0], yaw)) < tol * 4.0 and w.los(w.muz, (ex, ey, tz)):
+                    f0 = True                        # follow the big hit with the machine gun
+        cmb = self.combo(w, e, ux, uy, aim, f0, f1, d)
+        if cmb is not None:
+            return cmb
+        jig = self.gun_peek(w, e, ux, uy, aim, f0, f1)
+        if jig is not None:
+            return jig
         kx, ky = keep_in_front(w, e)
         if kx or ky:
             s = 1.0 if (-uy * kx + ux * ky) > 0 else -1.0      # strafe the way that brings the flanker in front
@@ -310,6 +325,99 @@ class CombatAgent(Agent):
         return plan(mv, aim, [f0, f1], boost, jump, note="duel")
 
 
+    def combo(self, w, e, ux, uy, aim, f0, f1, d):
+        """Owner's shooting combo (2026-11-21): open with the laser; then
+          killable (target <= combo_kill_frac HP or quick ttk, nobody else on us) -> aggro: forward diagonal jump,
+            jet a moment, machine gun the whole way
+          otherwise (the laser/jump left us badly placed) -> walk back-left firing the gun for the follow-up,
+            then wait behind cover combo_wait_s while it looks around, then side-strafe gun peeks (gun_peek)."""
+        mp = w.mode_p
+        if not mp.get("combo"):
+            return None
+        sec = w.weapons[1]
+        cd = (sec.get("cooldown") or 0) if sec and sec["kind"] == "laser" else 0
+        fired = sec is not None and sec["kind"] == "laser" and cd > 0 and getattr(self, "prev_cd", 0) == 0
+        self.prev_cd = cd
+        if fired:
+            hpf = (e.get("hp") or 1400) / max(1.0, e.get("max_hp") or 1400)
+            others = [s for s in w.shooters if s.get("id") != e["id"]]
+            ttk = (w.intent or {}).get("ttk") or 99
+            killable = (hpf <= mp.get("combo_kill_frac", 0.55) or ttk <= mp.get("combo_ttk", 3.0)) and not others
+            self.cmb, self.cmb_t, self.cmb_id = ("aggro" if killable else "back"), w.t, e["id"]
+            self.cmb_side = 1.0 if (w.tick // 13) % 2 else -1.0
+            w.log("combo", step=self.cmb, hp=round(hpf, 2), others=len(others))
+        st = getattr(self, "cmb", None)
+        if st is None or getattr(self, "cmb_id", None) != e["id"]:
+            return None
+        dt = w.t - self.cmb_t
+        g = w.weapons[0]
+        gun_ok = bool(g) and g.get("reload", 0) == 0 and w.los(w.muz, (e["pos"][0], e["pos"][1], e["pos"][2] + 4.5))
+        gun = gun_ok and abs(ang_diff(w.me["aim"][0], aim[0])) < math.atan2(2.2, max(d, 1.0)) * 3 + 0.05
+        s = self.cmb_side
+        if st == "aggro":
+            if dt > mp.get("combo_aggro_s", 2.0):
+                self.cmb = None
+                return None
+            mv = [ux * 0.75 - uy * s * 0.65, uy * 0.75 + ux * s * 0.65]      # forward diagonal
+            jump = w.me["grounded"] and dt < 0.3
+            boost = (not w.me["grounded"]) and dt < 0.8 and w.me["energy"] > 15
+            return plan(mv, aim, [gun, False], boost, jump, note="combo: aggro jump + gun")
+        if st == "back":
+            if dt < mp.get("combo_back_s", 1.5):
+                mv = [-ux * 0.7 - uy * 0.7, -uy * 0.7 + ux * 0.7]            # back and to the left
+                return plan(mv, aim, [gun, False], note="combo: back-left + gun follow-up")
+            self.cmb, self.cmb_t = "wait", w.t
+            st, dt = "wait", 0.0
+        if st == "wait":
+            c = getattr(self, "duel_cover", None)
+            if dt < mp.get("combo_wait_s", 2.5) and c is not None and math.dist(c, (w.x, w.y)) < 30:
+                mv = list(unit(c[0] - w.x, c[1] - w.y)) if math.dist(c, (w.x, w.y)) > 1.5 else [0.0, 0.0]
+                ready = sec is not None and sec["kind"] == "laser" and cd == 0
+                return plan(mv, aim, [False, ready], note="combo: wait behind cover")
+            self.cmb = None
+            self.peek_until = w.t + 6.0                  # then side-strafe gun peeks until the laser is back
+        return None
+
+    def gun_peek(self, w, e, ux, uy, aim, f0, f1):
+        """Jiggle peek (owner, 2026-11-21): from a cover point near us, strafe out to the side that has a line on
+        the target for peek_out_s shooting the gun, strafe back behind cover for peek_back_s, repeat. They only get
+        short windows on us; we always shoot when we're out."""
+        mp = w.mode_p
+        sec = w.weapons[1]
+        if sec is not None and sec["kind"] == "laser" and (sec.get("cooldown") or 0) == 0 and w.t < getattr(self, "peek_until", -1):
+            self.peek_until = -1                         # laser back: the combo opens again
+        if not (mp.get("gun_peek") or w.t < getattr(self, "peek_until", -1)) or w.sec == "lightning" or not w.me["in_zone"]:
+            return None
+        c = getattr(self, "duel_cover", None)
+        if c is None or math.dist(c, (w.x, w.y)) > mp.get("peek_cover_r", 20.0):
+            self.jig_t = None
+            return None
+        ex, ey, ez = e["pos"]
+        tz = ez + 4.5
+        if math.dist(c, (w.x, w.y)) > 3.5 and getattr(self, "jig_t", None) is None:
+            return plan(list(unit(c[0] - w.x, c[1] - w.y)), aim, [f0, f1], note="duel: to peek cover")
+        if getattr(self, "jig_t", None) is None:
+            self.jig_t = w.t
+        if w.t - getattr(self, "jig_side_t", -99) > 1.0:      # which side of the cover has a line on it
+            self.jig_side_t = w.t
+            self.jig_side = 0.0
+            for s in (1.0, -1.0) if (w.tick // 40) % 2 else (-1.0, 1.0):
+                px, py = c[0] - uy * s * 6.0, c[1] + ux * s * 6.0
+                if w.walkable(px, py) and w.los((px, py, w.ground(px, py, w.z) + 7.0), (ex, ey, tz)):
+                    self.jig_side = s
+                    break
+        s = getattr(self, "jig_side", 0.0)
+        if s == 0.0:
+            return None                  # no side has a line: let the duel handle it
+        out_s, back_s = mp.get("peek_out_s", 0.6), mp.get("peek_back_s", 0.5)
+        ph = (w.t - self.jig_t) % (out_s + back_s)
+        side = [-uy * s, ux * s]
+        if ph < out_s:
+            return plan(side, aim, [f0, f1], note="duel: peek out")
+        back = list(unit(c[0] - w.x, c[1] - w.y)) if math.dist(c, (w.x, w.y)) > 1.0 else [-side[0], -side[1]]
+        return plan(back, aim, [False, f1], note="duel: peek back")
+
+
 # ------------------------------------------------------------------------------------------------------------
 class LootAgent(Agent):
     name = "loot"
@@ -319,12 +427,18 @@ class LootAgent(Agent):
         rank = {k: i for i, k in enumerate(order)}
         cur = rank.get(w.sec, 99) if w.sec else 99
         best = None
-        for p in w.obs["pickups"]:
+        mp = w.mode_p
+        pk = list(w.obs["pickups"])
+        seen_ids = {p["id"] for p in pk}
+        for pid, (pos, kind, t) in list(getattr(w, "pickup_mem", {}).items()):
+            if pid not in seen_ids and w.t - t < 120:
+                pk.append({"id": pid, "pos": pos, "kind": kind, "remembered": True})
+        for p in pk:
             k = p["kind"]
             if k not in rank or rank[k] >= cur or k in w.held:
                 continue
             dd = math.dist(p["pos"][:2], (w.x, w.y))
-            if dd > self.p["see_r"] or abs(p["pos"][2] - w.z) > 6:
+            if dd > mp.get("weapon_r", self.p["see_r"]) or abs(p["pos"][2] - w.z) > 6:
                 continue
             rush = (getattr(w, "intent", None) or {}).get("intent") == "get weapon"
             if dd > 25 and not rush and w.p_undetected(p["pos"][0], p["pos"][1], p["pos"][2]) < self.p["min_p"]:
@@ -333,6 +447,8 @@ class LootAgent(Agent):
             if best is None or s < best[0]:
                 best = (s, p, dd)
         bid = self.p["bid"] + (0.15 if w.sec is None else 0.0)
+        if w.sec is None or rank.get(w.sec, 99) > 0:
+            bid += mp.get("weapon_bid_bonus", 0.0)
         if (getattr(w, "intent", None) or {}).get("intent") == "get weapon":
             bid += 0.35
         if best is not None:
@@ -342,7 +458,8 @@ class LootAgent(Agent):
                 m2 = w.unseen_step(mv)
                 if m2 != [0.0, 0.0]:
                     mv = m2
-            return bid, plan(mv, [math.atan2(p["pos"][1] - w.y, p["pos"][0] - w.x), 0.0], note="weapon " + p["kind"])
+            return bid, plan(mv, [math.atan2(p["pos"][1] - w.y, p["pos"][0] - w.x), 0.0],
+                             boost=dd > 40 and w.me["energy"] > 30, note="weapon " + p["kind"])
         # cubes and supply drops nearby (drops: only if hidden there)
         cand = []
         cc, cr = w.zone["center"], w.zone["radius"]

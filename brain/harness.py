@@ -80,7 +80,7 @@ class Harness:
         read that turns badly against us (lost outright, or new enemies joined) can turn 'stay' into 'run' early."""
         esc = self.P["agents"]["escape"]
         rd = situation.read(w, self.tracker, self.reasoner, esc)
-        if self.mode_p.get("never_run") and rd.get("verdict") == "run":
+        if self.mode_p.get("never_run") and rd.get("verdict") == "run" and not rd.get("big"):
             rd = dict(rd, verdict="stay", why="this mode never leaves a fight: " + rd["why"])
         w.fight_read = rd
         want, why = rd["verdict"], rd["why"]
@@ -185,6 +185,8 @@ class Harness:
                 bid += 1.1          # high ground beats everything but the zone once we're pressed or up there
             if self.stance == "run" and ag.name == "escape":
                 bid += 0.8          # fallback only: cover had no post
+                if (getattr(w, "fight_read", None) or {}).get("flee"):
+                    bid += 0.6      # a big enemy is chasing us: get away
             if self.stance == "stay" and ag.name == "combat":
                 bid += 0.5
             if self.stance == "stay" and ag.name == "cover" and self.mode_p.get("cover_in_fights", True):
@@ -254,6 +256,17 @@ class Harness:
         if name not in ("combat", "escape") and g and g.get("ammo", 12) < 9 and g.get("reload", 0) == 0 and not fire[0]:
             act["reload"] = True
         aim = chosen["aim"] if chosen["aim"] is not None else [me["aim"][0], 0.0]
+        # reflex: scout jump (owner): hop just high enough to see over nearby buildings, when calm and the zone is behind us
+        sp = self.mode_p
+        if sp.get("scout_jump") and me["grounded"] and not w.alerted and not w.enemies and me["energy"] > 40                 and w.t - getattr(self, "scout_t", -99) > sp.get("scout_every", 4.0) and name not in ("combat", "cover", "roof"):
+            nc = w.zone["next_center"]
+            zb = abs(ang_diff(math.atan2(nc[1] - w.y, nc[0] - w.x), me["aim"][0])) > 1.9   # next circle behind us
+            if zb or w.d_next < w.zone["next_radius"] * 0.5:
+                self.scout_t = w.t
+                jump = True
+                self.log("scout", t=round(w.t, 1))
+        if w.t - getattr(self, "scout_t", -99) < sp.get("scout_jet_s", 0.5) and not me["grounded"] and me["energy"] > 30:
+            boost = True
         # reflex: dodge bullets, charging-laser lines and mortar landing spots (take less damage)
         dp = self.P.get("dodge", {})
         if dp.get("on", True):
@@ -265,6 +278,10 @@ class Harness:
                 mv = [mx / n, my / n]
                 if me["energy"] > dp.get("boost_energy", 25):
                     boost = True
+                if "laser" in dwhy and dp.get("laser_jump", False) and me["energy"] > 20:
+                    if me["grounded"]:
+                        jump = True                  # jump high, diagonally across the beam's line
+                    boost = True                     # in the air, boost = jets up
                 if w.tick - getattr(self, "dodge_log_t", -99) > 10:
                     self.dodge_log_t = w.tick
                     self.log("dodge", why=dwhy)

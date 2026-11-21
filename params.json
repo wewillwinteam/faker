@@ -1,6 +1,6 @@
 {
   "_note": "Mech brain settings. The evaluator (projects/mech-royale/tools/evaluator) tunes the numbers under agents.* inside their 'tune' ranges and keeps a change only when the score holds. kit picks the loadout.",
-  "kit": "armor",
+  "kit": "gunlaser",
   "kits": {
     "shock": {
       "name": "Shock assassin",
@@ -210,6 +210,40 @@
         "laser_charge"
       ],
       "strike": "far"
+    },
+    "gunlaser": {
+      "name": "Gun + laser (owner, 2026-11-21)",
+      "secondary": [
+        "laser"
+      ],
+      "strike": "far",
+      "upgrades": [
+        "armor",
+        "plating",
+        "laser_charge",
+        "armor",
+        "plating",
+        "laser_damage",
+        "gun_damage",
+        "armor",
+        "plating",
+        "laser_damage",
+        "gun_rate",
+        "nanites",
+        "laser_damage",
+        "gun_damage",
+        "gun_rate",
+        "laser_charge",
+        "nanites",
+        "gyros",
+        "sensors",
+        "servos",
+        "gun_mag",
+        "gun_velocity",
+        "reactor",
+        "capacitor",
+        "jets"
+      ]
     }
   },
   "agents": {
@@ -557,6 +591,24 @@
       "never_run": true,
       "laser_still": false,
       "still_min": 80.0,
+      "gun_peek": true,
+      "peek_cover_r": 20.0,
+      "peek_out_s": 0.6,
+      "peek_back_s": 0.5,
+      "avoid_big": false,
+      "big_cubes": 5,
+      "big_hp": 1.3,
+      "big_flee_r": 90.0,
+      "gun_followup": false,
+      "scout_jump": false,
+      "scout_every": 4.0,
+      "scout_jet_s": 0.5,
+      "combo": false,
+      "combo_kill_frac": 0.55,
+      "combo_ttk": 3.0,
+      "combo_aggro_s": 2.0,
+      "combo_back_s": 1.5,
+      "combo_wait_s": 2.5,
       "farm_enemy_r": 120,
       "farm_clear_r": 0,
       "farm_npc_r": 400,
@@ -577,7 +629,25 @@
         "hold",
         "roof"
       ],
-      "never_run": false
+      "never_run": false,
+      "gun_peek": false,
+      "peek_cover_r": 20.0,
+      "peek_out_s": 0.6,
+      "peek_back_s": 0.5,
+      "avoid_big": false,
+      "big_cubes": 5,
+      "big_hp": 1.3,
+      "big_flee_r": 90.0,
+      "gun_followup": false,
+      "scout_jump": false,
+      "scout_every": 4.0,
+      "scout_jet_s": 0.5,
+      "combo": false,
+      "combo_kill_frac": 0.55,
+      "combo_ttk": 3.0,
+      "combo_aggro_s": 2.0,
+      "combo_back_s": 1.5,
+      "combo_wait_s": 2.5
     }
   },
   "sound": {},
@@ -605,6 +675,7 @@
         1.0,
         0.1
       ]
-    }
+    },
+    "laser_jump": false
   }
 }

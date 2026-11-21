@@ -167,6 +167,11 @@ class CoverAgent(Agent):
             self.phase, self.jump_t = "jump", w.t
             w.log("jumpshot", tgt=e["id"], d=round(d), facing=round(facing, 2))
             return plan([0.0, 0.0], aim, [False, True], jump=True, note="jump-shot")
+        # vs a big powered-up enemy: hide only, no peeks, until it leaves (owner, 2026-11-21)
+        if (getattr(w, "fight_read", None) or {}).get("big") and self.phase in ("hide", "peek"):
+            self.phase = "hide"
+            mv = list(unit(px - w.x, py - w.y)) if not at_post else [0.0, 0.0]
+            return plan(mv, aim, [False, False], note="cover: big enemy, wait it out")
         # 3. peek from the side
         if self.phase == "peek":
             dt = w.t - self.phase_t
