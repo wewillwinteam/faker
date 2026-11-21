@@ -101,7 +101,10 @@ class Reasoner:
                     k = 99.0
                 s = k + 2.5 * crowd + (0.0 if e["id"] == self.focus else 1.5)
                 cands.append((s, e, d, behind, unaware, k, crowd))
-            cands.sort(key=lambda c: c[0])
+            if p.get("nearest_target"):        # F-style: the nearest one we have a line on
+                cands.sort(key=lambda c: (0 if w.los(w.muz, (c[1]["pos"][0], c[1]["pos"][1], c[1]["pos"][2] + 4.5)) else 1, c[2]))
+            else:
+                cands.sort(key=lambda c: c[0])
             early = t < p["quiet_until"]
             if w.sec is None and t < p["weapon_rush_s"]:
                 easy = [c for c in cands if c[5] <= p["ttk_easy"] and c[4] and c[6] == 0]

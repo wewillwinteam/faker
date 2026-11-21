@@ -28,7 +28,7 @@ class Harness:
         self.reasoner = Reasoner(params["reasoner"])
         self.w.tracker, self.w.reasoner = self.tracker, self.reasoner
         self.w.intent = {}
-        self.agents = [cls(params["agents"][cls.name], self.kit) for cls in A.ALL + [C.CoverAgent, C.HealAgent, C.MoveAfterKillAgent]]
+        self.agents = [cls(params["agents"][cls.name], self.kit) for cls in A.ALL + [C.CoverAgent, C.HealAgent, C.MoveAfterKillAgent, C.HoldAgent]]
         self.cur = None
         self.sticky = params.get("harness", {}).get("sticky", 0.08)
         self.upg_taken = []
@@ -141,6 +141,7 @@ class Harness:
         want, why = self.decide_stance(w)
         w.stance, w.stance_until = self.stance, self.stance_until
         self.mode_p = self.P.get("modes", {}).get("ffa" if w.ffa else "squad", {})
+        w.mode_p = self.mode_p
         R, changed = self.reasoner.decide(w, self.tracker, self.stance)
         w.intent = R
         if changed:

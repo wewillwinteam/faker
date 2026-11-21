@@ -248,3 +248,84 @@ class MoveAfterKillAgent(Agent):
         mv = list(w.goto(*self.goal))
         m2 = w.unseen_step(mv)
         return self.p["bid"], plan(m2 if m2 != [0.0, 0.0] else mv, None, boost=w.me["energy"] > 30, note="move after kill")
+
+
+class HoldAgent(Agent):
+    """Practice: outlast the house bots (rival study 2026-11-21: top practice bots hold a strong spot far from everyone
+    at full HP; place = how many house bots are alive when we die, and the final zone kills them too).
+    Pick a spot in the next circle, far from every known enemy, high if possible; get there unseen; hold and watch;
+    move when the circle moves, someone comes within near_r, or the spot has been held hold_s."""
+    name = "hold"
+
+    def __init__(self, p, kit):
+        super().__init__(p, kit)
+        self.spot = None
+        self.spot_t = -99.0
+        self.circle = None
+        self.scan = 0.0
+        self.rng = __import__("random").Random(11)
+
+    def score(self, w, x, y):
+        z = w.ground(x, y, w.z)
+        near = 400.0
+        for tr in w.tracker.tracks.values():
+            tx, ty, unc, age = w.tracker.est(tr)
+            if age < 15:
+                near = min(near, math.hypot(tx - x, ty - y))
+        return min(near, self.p.get("far_r", 160.0)) + (z - w.z) * self.p.get("height_w", 3.0), near
+
+    def pick(self, w):
+        nc, nr = w.zone["next_center"], w.zone["next_radius"]
+        best, bs = None, -1e9
+        for _ in range(28):
+            a = self.rng.random() * 2 * math.pi
+            r = nr * self.p.get("ring", 0.6) * math.sqrt(self.rng.random())
+            x, y = nc[0] + math.cos(a) * r, nc[1] + math.sin(a) * r
+            if not w.walkable(x, y):
+                continue
+            s, near = self.score(w, x, y)
+            s -= 0.15 * math.hypot(x - w.x, y - w.y)
+            if s > bs:
+                best, bs = (x, y), s
+        return best
+
+    def propose(self, w):
+        R = getattr(w, "intent", None) or {}
+        if w.alerted or w.enemies or R.get("intent") not in ("rotate", None) or w.zone_urgent or not w.me["in_zone"]:
+            return None
+        if w.t < self.p.get("start_s", 20.0):
+            return None
+        nc = tuple(w.zone["next_center"])
+        close = w.tracker.near(w.x, w.y, self.p.get("near_r", 120.0), max_age=6.0)
+        if (self.spot is None or self.circle is None or math.dist(self.circle, nc) > 5 or close
+                or w.t - self.spot_t > self.p.get("hold_s", 60.0)
+                or math.dist(self.spot, nc) > w.zone["next_radius"] * 0.8):
+            sp = self.pick(w)
+            if sp is None:
+                return None
+            if self.spot is None or math.dist(sp, self.spot) > 10:
+                w.log("hold", x=round(sp[0]), y=round(sp[1]), why="close" if close else "new circle or time")
+            self.spot, self.spot_t, self.circle = sp, w.t, nc
+        d = math.dist(self.spot, (w.x, w.y))
+        if d > 4:
+            mv = list(w.goto(*self.spot))
+            m2 = w.unseen_step(mv)
+            mv = m2 if m2 != [0.0, 0.0] else mv
+            return self.p["bid"], plan(mv, [math.atan2(mv[1], mv[0]), 0.0] if mv != [0.0, 0.0] else None,
+                                       boost=d > 60 and w.me["energy"] > 50, note="to hold spot")
+        # hold: watch where trouble comes from (latest threat bearing, else nearest track, else sweep)
+        self.scan += 0.25
+        tgt = None
+        best = 1e9
+        for tr in w.tracker.tracks.values():
+            tx, ty, unc, age = w.tracker.est(tr)
+            dd = math.hypot(tx - w.x, ty - w.y)
+            if age < 20 and dd < best:
+                best, tgt = dd, (tx, ty)
+        if w.t < w.threat_until and w.threat_yaw is not None:
+            yaw = w.threat_yaw
+        elif tgt is not None:
+            yaw = math.atan2(tgt[1] - w.y, tgt[0] - w.x) + math.sin(self.scan) * 0.9
+        else:
+            yaw = self.scan
+        return self.p["bid"], plan([0.0, 0.0], [yaw, 0.0], note="holding")

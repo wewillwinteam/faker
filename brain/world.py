@@ -48,6 +48,7 @@ class World:
         self.ffa = False
         self.events = []
         self._tree_cache = {}
+        self.mode_p = {}
 
     # ---------------------------------------------------------------- geometry
     def los(self, a, b):

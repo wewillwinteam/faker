@@ -266,7 +266,7 @@ class CombatAgent(Agent):
         g = w.weapons[0]
         f0 = fire_ok and bool(g) and g.get("reload", 0) == 0 and d < (g.get("stats") or {}).get("range", 230) \
             and abs(ang_diff(w.me["aim"][0], yaw)) < tol * 2.5 and w.los(w.muz, (ex, ey, tz))
-        prefer = 30.0 if w.sec == "lightning" else 55.0   # close the distance: kills come faster up close
+        prefer = 30.0 if w.sec == "lightning" else w.mode_p.get("duel_range", 55.0)   # close in: kills come faster up close
         ux, uy = unit(ex - w.x, ey - w.y)
         if (w.tick - self.strafe_t) > 14 + (w.tick % 7):
             self.strafe, self.strafe_t = -self.strafe, w.tick
@@ -279,7 +279,7 @@ class CombatAgent(Agent):
         if w.tick % 10 == 0 or not hasattr(self, "duel_cover"):
             th = [x for x in w.recent if not x.get("ghost")][:3] or [e]
             self.duel_cover = w.find_cover(th, max_r=60.0)
-        if getattr(self, "duel_cover", None) is not None and w.sec != "lightning":
+        if getattr(self, "duel_cover", None) is not None and w.sec != "lightning" and w.mode_p.get("duel_cover", True):
             cx, cy = self.duel_cover
             if math.dist((cx, cy), (w.x, w.y)) > 3:
                 cv = unit(cx - w.x, cy - w.y)     # work toward cover while trading, never turn our back
@@ -415,7 +415,7 @@ class FarmAgent(Agent):
             return None
         if (getattr(w, "intent", None) or {}).get("intent") not in (None, "rotate", "get weapon"):
             return None
-        if w.tracker.near(w.x, w.y, self.p.get("clear_r", 120.0), max_age=8.0):
+        if w.tracker.near(w.x, w.y, w.mode_p.get("farm_clear_r", self.p.get("clear_r", 120.0)), max_age=8.0):
             return None
         if w.watchers and w.p_undetected(w.x, w.y, w.z) < self.p.get("min_p", 0.0):
             return None
