@@ -150,7 +150,8 @@ func DefaultParams() Params {
 		Ghost: true, HomeExpo: 120, LootRadius: 90, CrateUntil: 150, UseDrops: false, Dodge: true, NoMortar: true,
 		Peek: true, LaserFirst: false, CrowdHide: true, Practice: true}
 
-	p.Opening = true
+	p.LaserFirst = true
+	p.Lethal = true
 
 	return p
 }
@@ -1919,7 +1920,7 @@ func squadParams(p Params) Params {
 
 	p.LaserSeek = 240
 	p.LaserUp = true
-	p.Finish = 14
+	p.Lethal = true
 
 	return p
 }
