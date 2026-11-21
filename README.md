@@ -29,7 +29,7 @@ Code we did not write this weekend, each used unchanged under its MIT License (t
 | --- | --- | --- | --- | --- | --- |
 | `lance` | Python | https://github.com/LanceHuang245/mech-royale | `6bdf03b` | `lance_bot.py` | `LICENSE-lance` |
 | `lance_plus` | Python | our fork of `lance` above, every change behind a switch | — | `lance_plus.py` | `LICENSE-lance` |
-| `giddy` | Go | https://github.com/justnau/giddygiddyboy-mech-royale | `d672717726be459472f8bc21545e11a4151b364f` | `drivers/giddy/` (go.mod, cmd/, mech/) | `drivers/giddy/LICENSE` |
+| `giddy` | Go | https://github.com/justnau/giddygiddyboy-mech-royale | `2be660f8b1d47d7ebf7a193ca2aba81c40361ddd` | `drivers/giddy/` (go.mod, cmd/, mech/) | `drivers/giddy/LICENSE` |
 | `ttun` | TypeScript (Bun) | https://github.com/varchaskukreja/TTUN (folder `mech-royale/bot/`) | `11350d33091f01878c12fa2d63e942d12230566f` | `drivers/ttun/` (bot.ts, map.ts, mechfight.ts) | `drivers/ttun/LICENSE` |
 
 Plus the Builders mechfight kit wrapper (`mechfight.py`, and TTUN's copy `drivers/ttun/mechfight.ts`). The Dockerfile
