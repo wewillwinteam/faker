@@ -86,6 +86,21 @@ def child_command(name):
     return d["cmd"], d["cwd"], env
 
 
+def salted_hello(hello, salt):
+    """The hello for a child driver, with its RNG seed mixed with hybrid.seed_salt (0 = unchanged). Only the child
+    sees it; our own brain keeps the real hello."""
+    try:
+        salt = int(salt or 0)
+    except (TypeError, ValueError):
+        salt = 0
+    if not salt:
+        return hello
+    h = dict(hello)
+    s = (int(hello.get("seed") or 0) + salt * 2654435761) % 4294967291
+    h["seed"] = s or salt
+    return h
+
+
 class Bot:
     name = "2.3%-" + VARIANT
 
@@ -106,7 +121,7 @@ class Bot:
             try:
                 cmd, cwd, env = child_command(self.practice)
                 d = SubprocessDriver(cmd, cwd=cwd, name=self.practice, env=env)
-                if d.spawn(hello):          # start it first: it loads its map while we build ours
+                if d.spawn(salted_hello(hello, hy.get("seed_salt", 0))):  # start it first: it loads its map while we build ours
                     self.drv = d
             except Exception as e:
                 print("%s driver failed to start: %s" % (self.practice, e), file=sys.stderr)
