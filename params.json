@@ -682,11 +682,11 @@
   "_note": "practice: lance (in-process Python) | giddy (Go child process) | ttun (TypeScript on Bun, child process) | lance_plus (our Lance fork, switches in lance_flags) | anything else = our brain. ffa_switch_max_s 0 = never switch (the practice driver also plays the free-for-all); 90 = our brain takes over when 2+ unexplained deaths happen by 90 s. Child drivers: wait child_timeout_ms for the child's answer, child_ready_s for its ready; after max_child_fails misses in a row our brain drives for good; on a missed tick our brain answers only if fewer than fallback_brain_ms have passed, else we coast on the child's last move. seed_salt: 0 = the child driver gets our hello unchanged; any other integer mixes it into the hello seed the child sees (a re-roll of its RNG; our brain keeps the real hello).",
   "practice": "giddy",
   "lance_flags": "jink,arm,focus,range",
-  "ffa_switch_max_s": 90,
+  "ffa_switch_max_s": 0,
   "child_timeout_ms": 30,
   "child_ready_s": 10,
   "max_child_fails": 5,
   "fallback_brain_ms": 20,
-  "seed_salt": 4
+  "seed_salt": 0
  }
 }
