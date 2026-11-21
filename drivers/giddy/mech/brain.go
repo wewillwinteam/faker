@@ -141,6 +141,8 @@ type Params struct {
 	LaserUp    bool
 	EconSafe   float64
 	Opening    bool
+	NanoUp     bool
+	Finish     float64
 }
 
 func DefaultParams() Params {
@@ -440,10 +442,19 @@ var upgradeOrderLaser = []string{
 	"mortar_reload", "mortar_splash", "mortar_velocity", "sensors", "jets", "laser_pierce",
 }
 
-func pickUpgrade(of *Offer, laserUp bool) int {
+var upgradeOrderNano = []string{
+	"plating", "armor", "nanites", "laser_damage", "laser_charge", "gun_damage", "gun_rate", "lightning_efficiency", "lightning_range",
+	"servos", "gun_mag", "gun_velocity", "gyros", "lightning_chain", "reactor", "capacitor",
+	"mortar_reload", "mortar_splash", "mortar_velocity", "sensors", "jets", "laser_pierce",
+}
+
+func pickUpgrade(of *Offer, laserUp, nanoUp bool) int {
 	order := upgradeOrder
 	if laserUp {
 		order = upgradeOrderLaser
+	}
+	if nanoUp {
+		order = upgradeOrderNano
 	}
 	best, bestRank := 0, 1<<30
 	for i, c := range of.Choices {
@@ -474,7 +485,7 @@ func (b *Brain) step(o *Obs, act *Action) {
 	hpFrac := me.HP / math.Max(1, me.MaxHP)
 
 	if o.Offer != nil && len(o.Offer.Choices) > 0 {
-		p := pickUpgrade(o.Offer, b.P.LaserUp)
+		p := pickUpgrade(o.Offer, b.P.LaserUp, b.P.NanoUp)
 		act.Pick = &p
 	}
 
@@ -718,7 +729,13 @@ func (b *Brain) step(o *Obs, act *Action) {
 				}
 			}
 		}
-		mx, my = b.fightMove(o, foe, seen, wantLos)
+		if keep := b.P; b.P.Finish > 0 && foe.HP < 0.38*foe.MaxHP && hpFrac > 0.42 && crowd <= 2 {
+			b.P.GunRange, b.P.LaserRange, b.P.LightRange = b.P.Finish, b.P.Finish, b.P.Finish
+			mx, my = b.fightMove(o, foe, seen, wantLos)
+			b.P = keep
+		} else {
+			mx, my = b.fightMove(o, foe, seen, wantLos)
+		}
 		if light != nil && foe.Dist > 50 && me.Energy > 55 && wantLos > 0 {
 			boost = true
 		}
@@ -1902,7 +1919,7 @@ func squadParams(p Params) Params {
 
 	p.LaserSeek = 240
 	p.LaserUp = true
-	p.LaserRange = 140
+	p.Finish = 14
 
 	return p
 }
