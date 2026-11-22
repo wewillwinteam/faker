@@ -690,7 +690,7 @@
   "seed_salt": 0,
   "slot_salts": {
    "_note": "Per-slot seed salt (empty = off). Maps a hello slot number (\"0\" to \"15\") to the seed salt used only in matches we play from that slot; every other slot keeps seed_salt. The practice board replays the same private seeds each submission and the slot is fixed per match, so one submission with one slot salted measures those matches exactly against the base score; keep a slot's salt only when the board total went up. A salt only re-rolls the driver's random choices, so it does not change the strategy in the free-for-all.",
-   "15": 1
+   "0": 2
   }
  }
 }
