@@ -88,6 +88,7 @@ type Brain struct {
 	oddsFleeUntil      float64
 	base               Params
 	baseSet, pracOn    bool
+	endGhostOn         bool
 	openOn             bool
 	npcHurt            float64
 	npcBearing         float64
@@ -112,6 +113,7 @@ type Params struct {
 	LootRadius  float64
 	CrateUntil  float64
 	UseDrops    bool
+	EndGhost    float64
 	Dodge       bool
 	NoMortar    bool
 	Peek        bool
@@ -157,7 +159,7 @@ type Params struct {
 func DefaultParams() Params {
 	p := Params{RetreatHP: 0.38, RecoverHP: 0.8, GunRange: 85, LightRange: 28, LaserRange: 85, EngageDist: 60, FarmNPC: true, Explore: false,
 		Ghost: true, HomeExpo: 120, LootRadius: 90, CrateUntil: 150, UseDrops: false, Dodge: true, NoMortar: true,
-		Peek: true, LaserFirst: false, CrowdHide: true, Practice: true}
+		Peek: true, LaserFirst: false, CrowdHide: true, Practice: true, EndGhost: 140}
 
 	p.LaserFirst = true
 
@@ -348,6 +350,13 @@ func (b *Brain) observe(o *Obs) {
 			b.P = squadParams(b.base)
 		}
 	}
+	// End game in practice: when the circle gets small, stop fighting the whole squad and hide
+	// (rule from SandeepMadhavarapu/BattleRoyale b532564, MIT).
+	if b.pracOn && !b.endGhostOn && b.base.EndGhost > 0 && o.Zone.NextRadius <= b.base.EndGhost {
+		b.endGhostOn = true
+		b.P = b.base
+		b.P.Practice = false
+	}
 
 	z := &o.Zone
 	if b.holdStart != z.ShrinkStart {
@@ -510,7 +519,7 @@ func (b *Brain) step(o *Obs, act *Action) {
 	_, gun := hasWeapon(me.Weapons, "gun")
 	_, light := hasWeapon(me.Weapons, "lightning")
 	_, laser := hasWeapon(me.Weapons, "laser")
-	late := z.NextRadius <= 70 || o.Alive <= 3
+	late := (z.NextRadius <= 70 && !b.endGhostOn) || o.Alive <= 3
 
 	var seen []*Track
 	var target, hidden, shy *Track

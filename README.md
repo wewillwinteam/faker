@@ -32,6 +32,8 @@ Code we did not write this weekend, each used unchanged under its MIT License (t
 | `giddy` | Go | https://github.com/justnau/giddygiddyboy-mech-royale | `e19e3c8d45d980df35c2fa5318353aaeb7c515bd` | `drivers/giddy/` (go.mod, cmd/, mech/) | `drivers/giddy/LICENSE` |
 | `ttun` | TypeScript (Bun) | https://github.com/varchaskukreja/TTUN (folder `mech-royale/bot/`) | `11350d33091f01878c12fa2d63e942d12230566f` | `drivers/ttun/` (bot.ts, map.ts, mechfight.ts) | `drivers/ttun/LICENSE` |
 
+The practice late-hide rule in `giddy` (`EndGhost`, `drivers/giddy/mech/brain.go`) is from SandeepMadhavarapu/BattleRoyale (https://github.com/SandeepMadhavarapu/BattleRoyale, MIT, commit `b532564`).
+
 Plus the Builders mechfight kit wrapper (`mechfight.py`, and TTUN's copy `drivers/ttun/mechfight.ts`). The Dockerfile
 builds `giddy` with `golang:1.26.1-bookworm` and bundles `ttun` with `oven/bun:1.4.4-slim` (both pinned by digest) and
 copies the `bun` runtime into our image. `params.json` `hybrid.practice` picks the practice driver (`"lance"`,
