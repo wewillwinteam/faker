@@ -188,7 +188,6 @@
   "fallback_brain_ms": 20,
   "seed_salt": 0,
   "slot_endghost": {
-   "15": 0,
    "_note": "Per-slot practice late-hide radius for giddy (EndGhost: hide once the next circle is this small; 0 = off, as S17G). Empty = 140 everywhere (S20)."
   },
   "slot_salts": {
