@@ -77,7 +77,9 @@ class Tracker:
         for k in [k for k, tr in self.tracks.items() if isinstance(k, str)]:
             hx, hy, hu, _ = self.est(self.tracks[k])
             for i in seen_ids:
-                s = self.tracks[i]
+                s = self.tracks.get(i)
+                if s is None:
+                    continue
                 if math.hypot(s["x"] - hx, s["y"] - hy) < hu + 10:
                     self.tracks.pop(k, None)
                     break

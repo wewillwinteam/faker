@@ -61,21 +61,6 @@ def read(w, trk, reasoner, p):
                     "shooters": len(sh), "joining": 0, "cover": True}
         return {"verdict": "stay", "why": "hit by someone we can't see, no cover near: turn and find it", "margin": 0.0,
                 "shooters": len(sh), "joining": 0, "cover": False}
-    me_c, me_hp = w.me.get("cubes", 0), w.me["max_hp"]
-    bp = getattr(w, "mode_p", {}) or {}
-    big = [e for e in seen if bp.get("avoid_big", False) and (
-        (e.get("cubes") or 0) >= me_c + bp.get("big_cubes", 5) or (e.get("max_hp") or 1400) >= me_hp * bp.get("big_hp", 1.3))]
-    if big:
-        b = min(big, key=lambda e: e.get("_d", 999))
-        vx, vy = (b.get("vel") or [0, 0, 0])[:2]
-        closing = (vx * (w.x - b["pos"][0]) + vy * (w.y - b["pos"][1])) > 0
-        c, tr = cover_reach(w, seen, hp / 150.0)
-        if closing and b.get("_d", 999) < bp.get("big_flee_r", 90.0):
-            return {"verdict": "run", "why": "big powered-up enemy (%s cubes) chasing: flee" % b.get("cubes"), "margin": -1.0,
-                    "shooters": len(sh), "joining": 0, "cover": False, "big": True, "flee": True}
-        if c is not None:
-            return {"verdict": "run", "why": "big powered-up enemy (%s cubes): cover until it leaves" % b.get("cubes"), "margin": -1.0,
-                    "shooters": len(sh), "joining": 0, "cover": True, "big": True}
     ids = {e.get("id") for e in seen}
     joining = []
     for tr in trk.near(w.x, w.y, p.get("join_r", 120.0), max_age=4.0):

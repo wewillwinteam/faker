@@ -1,222 +1,12 @@
 {
- "_note": "Mech brain settings. The evaluator (projects/mech-royale/tools/evaluator) tunes the numbers under agents.* inside their 'tune' ranges and keeps a change only when the score holds. kit picks the loadout.",
+ "_note": "Mech brain settings: kit picks the loadout, agents.* / reasoner / modes.<squad|ffa> hold the brain's numbers, hybrid picks who drives practice.",
  "kit": "gunlaser",
  "kits": {
-  "shock": {
-   "name": "Shock assassin",
-   "secondary": [
-    "lightning",
-    "laser",
-    "mortar"
-   ],
-   "upgrades": [
-    "lightning_range",
-    "lightning_range",
-    "servos",
-    "armor",
-    "lightning_efficiency",
-    "plating",
-    "sensors",
-    "jets",
-    "nanites",
-    "gun_damage",
-    "gun_rate",
-    "gyros",
-    "reactor",
-    "capacitor",
-    "laser_charge",
-    "laser_damage",
-    "lightning_chain",
-    "gun_mag",
-    "gun_velocity"
-   ],
-   "strike": "close"
-  },
-  "laser": {
-   "name": "Backstab sniper",
-   "secondary": [
-    "laser",
-    "lightning",
-    "mortar"
-   ],
-   "upgrades": [
-    "laser_charge",
-    "laser_damage",
-    "sensors",
-    "servos",
-    "armor",
-    "plating",
-    "laser_damage",
-    "gyros",
-    "nanites",
-    "gun_damage",
-    "gun_rate",
-    "jets",
-    "reactor",
-    "capacitor",
-    "gun_velocity",
-    "gun_mag",
-    "lightning_range",
-    "lightning_efficiency"
-   ],
-   "strike": "far"
-  },
-  "ghost": {
-   "name": "Ghost runner",
-   "secondary": [
-    "lightning",
-    "laser",
-    "mortar"
-   ],
-   "upgrades": [
-    "servos",
-    "jets",
-    "servos",
-    "lightning_range",
-    "reactor",
-    "servos",
-    "capacitor",
-    "armor",
-    "jets",
-    "lightning_efficiency",
-    "plating",
-    "sensors",
-    "nanites",
-    "gun_damage",
-    "gun_rate",
-    "gyros"
-   ],
-   "strike": "close"
-  },
-  "gun": {
-   "name": "Gun ghost",
-   "secondary": [],
-   "upgrades": [
-    "gun_damage",
-    "gun_rate",
-    "sensors",
-    "servos",
-    "gun_damage",
-    "armor",
-    "gun_rate",
-    "plating",
-    "gun_mag",
-    "gyros",
-    "nanites",
-    "gun_velocity",
-    "jets",
-    "reactor",
-    "capacitor"
-   ],
-   "strike": "gun"
-  },
-  "blend": {
-   "name": "Blend (I rules + F farming)",
-   "secondary": [
-    "lightning",
-    "laser",
-    "mortar"
-   ],
-   "upgrades": [
-    "armor",
-    "plating",
-    "nanites",
-    "gun_damage",
-    "lightning_range",
-    "lightning_efficiency",
-    "laser_damage",
-    "gun_rate",
-    "servos",
-    "gun_mag",
-    "capacitor",
-    "reactor",
-    "gyros",
-    "sensors",
-    "gun_velocity",
-    "jets",
-    "laser_charge",
-    "lightning_chain"
-   ],
-   "strike": "close"
-  },
-  "veteran": {
-   "name": "Veteran: laser + gun, HP to outlast the final zone",
-   "secondary": [
-    "laser",
-    "lightning",
-    "mortar"
-   ],
-   "upgrades": [
-    "plating",
-    "armor",
-    "laser_damage",
-    "plating",
-    "armor",
-    "nanites",
-    "laser_charge",
-    "plating",
-    "armor",
-    "laser_damage",
-    "gun_damage",
-    "nanites",
-    "laser_damage",
-    "gun_rate",
-    "sensors",
-    "servos",
-    "laser_charge",
-    "gyros",
-    "gun_damage",
-    "gun_rate",
-    "reactor",
-    "capacitor",
-    "jets",
-    "gun_mag",
-    "gun_velocity"
-   ],
-   "strike": "far"
-  },
-  "armor": {
-   "name": "Armor first (Lance: -30% damage taken ~ +1.65 pts)",
-   "secondary": [
-    "laser",
-    "lightning",
-    "mortar"
-   ],
-   "upgrades": [
-    "armor",
-    "plating",
-    "armor",
-    "plating",
-    "armor",
-    "plating",
-    "nanites",
-    "nanites",
-    "laser_damage",
-    "laser_charge",
-    "gun_damage",
-    "laser_damage",
-    "gun_rate",
-    "sensors",
-    "servos",
-    "laser_damage",
-    "gyros",
-    "gun_damage",
-    "gun_rate",
-    "reactor",
-    "capacitor",
-    "jets",
-    "gun_mag",
-    "gun_velocity",
-    "laser_charge"
-   ],
-   "strike": "far"
-  },
   "gunlaser": {
    "name": "Gun + laser (owner, 2026-11-21)",
    "secondary": [
     "laser"
    ],
-   "strike": "far",
    "upgrades": [
     "armor",
     "plating",
@@ -254,126 +44,24 @@
    "bid": 0.9,
    "min_shooters": 3,
    "hold_s": 2.0,
-   "tune": {
-    "min_shooters": [
-     1,
-     3,
-     1
-    ],
-    "hold_s": [
-     1.0,
-     4.0,
-     0.5
-    ],
-    "win_margin": [
-     0.0,
-     0.4,
-     0.05
-    ],
-    "join_r": [
-     60.0,
-     200.0,
-     20.0
-    ],
-    "join_w": [
-     0.2,
-     1.0,
-     0.1
-    ]
-   },
-   "win_margin": 0.15,
    "join_r": 120.0,
    "join_w": 0.5
   },
   "combat": {
-   "bid": 0.8,
-   "engage_p": 0.7,
-   "engage_p_escape": 0.4,
-   "escape_r": 30.0,
-   "far_range": 190.0,
-   "tune": {
-    "engage_p": [
-     0.5,
-     0.9,
-     0.05
-    ],
-    "engage_p_escape": [
-     0.2,
-     0.6,
-     0.05
-    ],
-    "escape_r": [
-     20.0,
-     45.0,
-     5.0
-    ],
-    "far_range": [
-     120.0,
-     220.0,
-     20.0
-    ]
-   }
+   "bid": 0.8
   },
   "loot": {
    "bid": 0.6,
    "see_r": 200.0,
-   "min_p": 0.6,
-   "tune": {
-    "see_r": [
-     100.0,
-     220.0,
-     20.0
-    ],
-    "min_p": [
-     0.3,
-     0.9,
-     0.1
-    ]
-   }
+   "min_p": 0.6
   },
   "stealth": {
    "bid": 0.5,
-   "prey_r": 190.0,
-   "quiet_r": 130.0,
-   "crowd_r": 90.0,
-   "tune": {
-    "prey_r": [
-     120.0,
-     220.0,
-     20.0
-    ],
-    "quiet_r": [
-     90.0,
-     160.0,
-     10.0
-    ],
-    "crowd_r": [
-     60.0,
-     130.0,
-     10.0
-    ]
-   }
+   "quiet_r": 130.0
   },
   "farm": {
    "bid": 0.55,
    "max_cubes": 14,
-   "tune": {
-    "max_cubes": [
-     6,
-     20,
-     2
-    ],
-    "clear_r": [
-     60.0,
-     200.0,
-     20.0
-    ],
-    "bid": [
-     0.3,
-     0.8,
-     0.05
-    ]
-   },
    "clear_r": 120.0
   },
   "drift": {
@@ -388,51 +76,15 @@
    "peek_s": 1.2,
    "hide_s": 0.9,
    "away_rad": 1.2,
-   "away_s": 1.0,
-   "tune": {
-    "ground_hold_s": [
-     3.0,
-     15.0,
-     1.0
-    ],
-    "hide_s": [
-     0.5,
-     2.0,
-     0.25
-    ],
-    "min_range": [
-     30.0,
-     90.0,
-     10.0
-    ],
-    "away_s": [
-     0.5,
-     2.5,
-     0.5
-    ]
-   }
+   "away_s": 1.0
   },
   "heal": {
    "bid": 0.75,
-   "heal_frac": 0.75,
-   "tune": {
-    "heal_frac": [
-     0.5,
-     0.9,
-     0.05
-    ]
-   }
+   "heal_frac": 0.75
   },
   "reposition": {
    "bid": 0.7,
-   "move_s": 3.0,
-   "tune": {
-    "move_s": [
-     1.0,
-     5.0,
-     1.0
-    ]
-   }
+   "move_s": 3.0
   },
   "hold": {
    "bid": 0.65,
@@ -441,86 +93,16 @@
    "hold_s": 60.0,
    "far_r": 160.0,
    "height_w": 3.0,
-   "ring": 0.6,
-   "tune": {
-    "start_s": [
-     0.0,
-     90.0,
-     15.0
-    ],
-    "near_r": [
-     60.0,
-     180.0,
-     20.0
-    ],
-    "hold_s": [
-     20.0,
-     120.0,
-     20.0
-    ],
-    "ring": [
-     0.3,
-     0.8,
-     0.1
-    ]
-   }
+   "ring": 0.6
   },
   "thirdparty": {
    "bid": 0.7,
-   "bid_commit": 0.9,
-   "tune": {
-    "bid": [
-     0.5,
-     0.85,
-     0.05
-    ]
-   }
-  },
-  "roof": {
-   "bid": 0.9,
-   "press_r": 150.0,
-   "press_n": 2,
-   "min_energy": 45.0,
-   "roof_r": 45.0,
-   "climb_s": 10.0,
-   "jump_d": 14.0,
-   "hold_s": 45.0,
-   "peek_s": 1.2,
-   "peek_gap": 1.5,
-   "tune": {
-    "press_n": [
-     1,
-     3,
-     1
-    ],
-    "roof_r": [
-     25.0,
-     70.0,
-     5.0
-    ],
-    "hold_s": [
-     15.0,
-     90.0,
-     15.0
-    ],
-    "peek_gap": [
-     0.8,
-     3.0,
-     0.4
-    ]
-   }
+   "bid_commit": 0.9
   }
  },
  "harness": {
   "sticky": 0.08,
-  "lock_s": 3.0,
-  "tune": {
-   "lock_s": [
-    1.5,
-    6.0,
-    0.5
-   ]
-  }
+  "lock_s": 3.0
  },
  "reasoner": {
   "ttk_max": 6.0,
@@ -530,38 +112,6 @@
   "engage_p": 0.7,
   "quiet_until": 30,
   "weapon_rush_s": 60,
-  "tune": {
-   "ttk_max": [
-    2.5,
-    6.0,
-    0.5
-   ],
-   "ttk_easy": [
-    1.0,
-    3.0,
-    0.5
-   ],
-   "max_crowd": [
-    0,
-    2,
-    1
-   ],
-   "quiet_until": [
-    30,
-    120,
-    15
-   ],
-   "weapon_rush_s": [
-    45,
-    150,
-    15
-   ],
-   "fight_close": [
-    40.0,
-    120.0,
-    10.0
-   ]
-  },
   "fight_close": 70.0,
   "modes": {
    "squad": {
@@ -585,30 +135,13 @@
     "cover",
     "heal",
     "reposition",
-    "thirdparty",
-    "roof"
+    "thirdparty"
    ],
    "never_run": true,
-   "laser_still": false,
-   "still_min": 80.0,
    "gun_peek": true,
    "peek_cover_r": 20.0,
    "peek_out_s": 0.6,
    "peek_back_s": 0.5,
-   "avoid_big": false,
-   "big_cubes": 5,
-   "big_hp": 1.3,
-   "big_flee_r": 90.0,
-   "gun_followup": false,
-   "scout_jump": false,
-   "scout_every": 4.0,
-   "scout_jet_s": 0.5,
-   "combo": false,
-   "combo_kill_frac": 0.55,
-   "combo_ttk": 3.0,
-   "combo_aggro_s": 2.0,
-   "combo_back_s": 1.5,
-   "combo_wait_s": 2.5,
    "farm_enemy_r": 120,
    "farm_clear_r": 0,
    "farm_npc_r": 400,
@@ -626,28 +159,13 @@
   "ffa": {
    "cover_in_fights": true,
    "agents_off": [
-    "hold",
-    "roof"
+    "hold"
    ],
    "never_run": false,
    "gun_peek": false,
    "peek_cover_r": 20.0,
    "peek_out_s": 0.6,
-   "peek_back_s": 0.5,
-   "avoid_big": false,
-   "big_cubes": 5,
-   "big_hp": 1.3,
-   "big_flee_r": 90.0,
-   "gun_followup": false,
-   "scout_jump": false,
-   "scout_every": 4.0,
-   "scout_jet_s": 0.5,
-   "combo": false,
-   "combo_kill_frac": 0.55,
-   "combo_ttk": 3.0,
-   "combo_aggro_s": 2.0,
-   "combo_back_s": 1.5,
-   "combo_wait_s": 2.5
+   "peek_back_s": 0.5
   }
  },
  "sound": {},
@@ -658,36 +176,20 @@
   "laser_r": 4.5,
   "splash_r": 10.0,
   "weight": 1.2,
-  "boost_energy": 25,
-  "tune": {
-   "weight": [
-    0.6,
-    2.0,
-    0.2
-   ],
-   "bullet_r": [
-    2.5,
-    6.0,
-    0.5
-   ],
-   "look_s": [
-    0.3,
-    1.0,
-    0.1
-   ]
-  },
-  "laser_jump": false
+  "boost_energy": 25
  },
  "hybrid": {
-  "_note": "practice: lance (in-process Python) | giddy (Go child process) | ttun (TypeScript on Bun, child process) | lance_plus (our Lance fork, switches in lance_flags) | anything else = our brain. ffa_switch_max_s 0 = never switch (the practice driver also plays the free-for-all); 90 = our brain takes over when 2+ unexplained deaths happen by 90 s. Child drivers: wait child_timeout_ms for the child's answer, child_ready_s for its ready; after max_child_fails misses in a row our brain drives for good; on a missed tick our brain answers only if fewer than fallback_brain_ms have passed, else we coast on the child's last move. seed_salt: 0 = the child driver gets our hello unchanged; any other integer mixes it into the hello seed the child sees (a re-roll of its RNG; our brain keeps the real hello).",
+  "_note": "practice: giddy (Go child process, drivers/giddy) or anything else = our brain. ffa_switch_max_s 0 = never switch (giddy also plays the free-for-all); 90 = our brain takes over when 2+ unexplained deaths happen by 90 s. Child: wait child_timeout_ms for its answer, child_ready_s for its ready; after max_child_fails misses in a row our brain drives for good; on a missed tick our brain answers only if fewer than fallback_brain_ms have passed, else we coast on the child's last move. seed_salt / slot_salts: re-roll the child's RNG (all matches / one hello slot); 0 or empty = unchanged.",
   "practice": "giddy",
-  "lance_flags": "jink,arm,focus,range",
   "ffa_switch_max_s": 0,
   "child_timeout_ms": 30,
   "child_ready_s": 10,
   "max_child_fails": 5,
   "fallback_brain_ms": 20,
   "seed_salt": 0,
+  "slot_endghost": {
+   "_note": "Per-slot practice late-hide radius for giddy (EndGhost: hide once the next circle is this small; 0 = off, as S17G). Empty = 140 everywhere (S20)."
+  },
   "slot_salts": {
    "_note": "Per-slot seed salt (empty = off). Maps a hello slot number (\"0\" to \"15\") to the seed salt used only in matches we play from that slot; every other slot keeps seed_salt. The practice board replays the same private seeds each submission and the slot is fixed per match, so one submission with one slot salted measures those matches exactly against the base score; keep a slot's salt only when the board total went up. A salt only re-rolls the driver's random choices, so it does not change the strategy in the free-for-all."
   }

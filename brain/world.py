@@ -42,7 +42,6 @@ class World:
         self.dmg_t = -99.0       # last damage from a mech
         self.threat_yaw = None
         self.threat_until = -1.0
-        self.kills = 0
         self.last_alive = None
         self.unexplained = 0
         self.ffa = False
@@ -248,8 +247,8 @@ class World:
         kills_now = 0
         for ev in obs["events"]:
             if ev["type"] == "kill":
-                self.kills += 1
                 kills_now += 1
+                self.known.pop(ev.get("target"), None)   # our kill is no longer a threat (was kept 3 s as a shooter)
             elif ev["type"] == "damaged":
                 if ev.get("by") is not None and ev["by"] < 100:
                     self.dmg_t = self.t
@@ -295,7 +294,7 @@ class World:
         for p in obs.get("pickups") or []:
             pm[p["id"]] = (p["pos"], p["kind"], self.t)
         for ev in obs["events"]:
-            if ev["type"] in ("took", "take_failed"):
+            if ev["type"] == "took" or (ev["type"] == "take_failed" and ev.get("reason") == "gone"):
                 pm.pop(ev.get("id"), None)
         for key in [k for k, v in pm.items() if math.dist(v[0][:2], (self.x, self.y)) < 6 and self.t - v[2] > 1.0]:
             pm.pop(key, None)          # stood on its spot and it's not there: gone
@@ -305,9 +304,8 @@ class World:
         for c in obs.get("crates") or []:
             fm[("c", c["id"])] = (c["pos"], "crate", self.t)
         for ev in obs["events"]:
-            if ev["type"] in ("kill", "destroyed", "crate"):
-                for key in [k for k in fm if k[1] == ev.get("target") or k[1] == ev.get("id")]:
-                    fm.pop(key, None)
+            if ev["type"] == "kill":   # protocol: only our mech kills are events; NPCs/crates clear by proximity below
+                fm.pop(("n", ev.get("target")), None)
         for key in [k for k, v in fm.items() if math.dist(v[0][:2], (self.x, self.y)) < 25 and self.t - v[2] > 2]:
             fm.pop(key, None)          # we're there and it's gone
         for e in self.enemies:

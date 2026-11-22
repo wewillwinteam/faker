@@ -3,8 +3,7 @@ it should be in control right now. The harness picks one. Agents never act on th
 
 zone    get inside the circle in time
 escape  2+ enemies have a line on us (or we are low and under fire): break line of sight, wait at the corner
-combat  strike an unaware target from behind, but only when the gate passes: the chance no one else notices is high,
-        or a way out exists; or finish a fight we are already in
+combat  strike the reasoner's focus (unaware, from behind) or finish a fight we are already in
 loot    weapons first (the kit's order), then cubes and supply drops, walking only where no one sees us
 stealth enemies in view and none on us: circle outside their cone and 45 m, get behind one, stay unseen
 farm    drones and crates for cubes, only where no one would see us
@@ -80,17 +79,6 @@ def keep_in_front(w, e):
     if (w.x - mx) * nx + (w.y - my) * ny < 0:
         nx, ny = -nx, -ny
     return nx, ny
-
-
-def laser_still(w, d):
-    """Stand still with the laser (owner idea; #1 practice bot parks 100-180 m out with a laser): a planted mech
-    charges and lands the beam; the dodge reflex still steps us off incoming fire."""
-    sec = w.weapons[1]
-    if not w.mode_p.get("laser_still") or sec is None or sec["kind"] != "laser":
-        return False
-    if d < w.mode_p.get("still_min", 80.0) or d > 275:
-        return False
-    return sec.get("cooldown", 0) == 0 or (sec.get("charge") or 0) > 0
 
 
 def secondary_fire(w, e, d, yaw, aim, tol):
@@ -213,22 +201,6 @@ class CombatAgent(Agent):
         self.strafe_t = 0
         self.striking = None
 
-    def strike_range(self, w):
-        s = self.kit.get("strike", "close")
-        if s == "far" and w.sec == "laser":
-            return self.p["far_range"]
-        if w.lrange:
-            return w.lrange - 3.0
-        return 150.0 if s in ("gun", "far") else 38.0
-
-    def gate(self, w, e):
-        """Engage only if no one else is likely to notice, or a way out exists. Returns (ok, p, n_others, escape)."""
-        p = w.p_undetected(w.x, w.y, w.z, ignore=e["id"])
-        others = w.others_with_line(w.x, w.y, w.z, ignore=e["id"])
-        esc = w.find_cover([e] + others, max_r=self.p["escape_r"]) is not None
-        ok = (p >= self.p["engage_p"] and (not others or esc)) or (esc and p >= self.p["engage_p_escape"])
-        return ok, p, len(others), esc
-
     def propose(self, w):
         R = getattr(w, "intent", None) or {}
         it, fid = R.get("intent"), R.get("focus")
@@ -264,8 +236,6 @@ class CombatAgent(Agent):
         mv = list(unit(px - w.x, py - w.y)) if math.dist((px, py), (w.x, w.y)) > 3 else [vx / 12.0, vy / 12.0]
         rear = abs(ang_diff(math.atan2(w.y - ey, w.x - ex), face))
         boost = w.lrange is not None and rear < 1.75 and w.me["energy"] > 30
-        if laser_still(w, d):
-            return plan([0.0, 0.0], aim, fire, False, note="strike: still laser")
         return plan(mv, aim, fire, boost, note="strike")
 
     def duel(self, w, e, fire_ok=True):
@@ -296,18 +266,6 @@ class CombatAgent(Agent):
             cx, cy = self.duel_cover
             if math.dist((cx, cy), (w.x, w.y)) > 3:
                 cv = unit(cx - w.x, cy - w.y)     # work toward cover while trading, never turn our back
-        if w.mode_p.get("gun_followup"):
-            for ev in w.events:
-                if ev["type"] == "hit" and ev.get("weapon") in ("laser", "mortar") and ev.get("target") == e["id"]:
-                    side = abs(ang_diff(math.atan2(w.y - ey, w.x - ex), e["aim"][0])) > 1.0
-                    if side or ev.get("rear"):
-                        self.follow_until, self.follow_id = w.t + 1.6, e["id"]
-            if w.t < getattr(self, "follow_until", -1) and getattr(self, "follow_id", None) == e["id"] and g and g.get("reload", 0) == 0:
-                if abs(ang_diff(w.me["aim"][0], yaw)) < tol * 4.0 and w.los(w.muz, (ex, ey, tz)):
-                    f0 = True                        # follow the big hit with the machine gun
-        cmb = self.combo(w, e, ux, uy, aim, f0, f1, d)
-        if cmb is not None:
-            return cmb
         jig = self.gun_peek(w, e, ux, uy, aim, f0, f1)
         if jig is not None:
             return jig
@@ -320,73 +278,14 @@ class CombatAgent(Agent):
         if not w.me["in_zone"]:
             mv, boost = [zv[0] - uy * s * 0.3, zv[1] + ux * s * 0.3], w.me["energy"] > 25
         jump = (w.tick % 34 == 0) and d > 40
-        if laser_still(w, d) and w.me["in_zone"]:
-            return plan([0.0, 0.0], aim, [f0, f1], False, False, note="duel: still laser")
         return plan(mv, aim, [f0, f1], boost, jump, note="duel")
-
-
-    def combo(self, w, e, ux, uy, aim, f0, f1, d):
-        """Owner's shooting combo (2026-11-21): open with the laser; then
-          killable (target <= combo_kill_frac HP or quick ttk, nobody else on us) -> aggro: forward diagonal jump,
-            jet a moment, machine gun the whole way
-          otherwise (the laser/jump left us badly placed) -> walk back-left firing the gun for the follow-up,
-            then wait behind cover combo_wait_s while it looks around, then side-strafe gun peeks (gun_peek)."""
-        mp = w.mode_p
-        if not mp.get("combo"):
-            return None
-        sec = w.weapons[1]
-        cd = (sec.get("cooldown") or 0) if sec and sec["kind"] == "laser" else 0
-        fired = sec is not None and sec["kind"] == "laser" and cd > 0 and getattr(self, "prev_cd", 0) == 0
-        self.prev_cd = cd
-        if fired:
-            hpf = (e.get("hp") or 1400) / max(1.0, e.get("max_hp") or 1400)
-            others = [s for s in w.shooters if s.get("id") != e["id"]]
-            ttk = (w.intent or {}).get("ttk") or 99
-            killable = (hpf <= mp.get("combo_kill_frac", 0.55) or ttk <= mp.get("combo_ttk", 3.0)) and not others
-            self.cmb, self.cmb_t, self.cmb_id = ("aggro" if killable else "back"), w.t, e["id"]
-            self.cmb_side = 1.0 if (w.tick // 13) % 2 else -1.0
-            w.log("combo", step=self.cmb, hp=round(hpf, 2), others=len(others))
-        st = getattr(self, "cmb", None)
-        if st is None or getattr(self, "cmb_id", None) != e["id"]:
-            return None
-        dt = w.t - self.cmb_t
-        g = w.weapons[0]
-        gun_ok = bool(g) and g.get("reload", 0) == 0 and w.los(w.muz, (e["pos"][0], e["pos"][1], e["pos"][2] + 4.5))
-        gun = gun_ok and abs(ang_diff(w.me["aim"][0], aim[0])) < math.atan2(2.2, max(d, 1.0)) * 3 + 0.05
-        s = self.cmb_side
-        if st == "aggro":
-            if dt > mp.get("combo_aggro_s", 2.0):
-                self.cmb = None
-                return None
-            mv = [ux * 0.75 - uy * s * 0.65, uy * 0.75 + ux * s * 0.65]      # forward diagonal
-            jump = w.me["grounded"] and dt < 0.3
-            boost = (not w.me["grounded"]) and dt < 0.8 and w.me["energy"] > 15
-            return plan(mv, aim, [gun, False], boost, jump, note="combo: aggro jump + gun")
-        if st == "back":
-            if dt < mp.get("combo_back_s", 1.5):
-                mv = [-ux * 0.7 - uy * 0.7, -uy * 0.7 + ux * 0.7]            # back and to the left
-                return plan(mv, aim, [gun, False], note="combo: back-left + gun follow-up")
-            self.cmb, self.cmb_t = "wait", w.t
-            st, dt = "wait", 0.0
-        if st == "wait":
-            c = getattr(self, "duel_cover", None)
-            if dt < mp.get("combo_wait_s", 2.5) and c is not None and math.dist(c, (w.x, w.y)) < 30:
-                mv = list(unit(c[0] - w.x, c[1] - w.y)) if math.dist(c, (w.x, w.y)) > 1.5 else [0.0, 0.0]
-                ready = sec is not None and sec["kind"] == "laser" and cd == 0
-                return plan(mv, aim, [False, ready], note="combo: wait behind cover")
-            self.cmb = None
-            self.peek_until = w.t + 6.0                  # then side-strafe gun peeks until the laser is back
-        return None
 
     def gun_peek(self, w, e, ux, uy, aim, f0, f1):
         """Jiggle peek (owner, 2026-11-21): from a cover point near us, strafe out to the side that has a line on
         the target for peek_out_s shooting the gun, strafe back behind cover for peek_back_s, repeat. They only get
         short windows on us; we always shoot when we're out."""
         mp = w.mode_p
-        sec = w.weapons[1]
-        if sec is not None and sec["kind"] == "laser" and (sec.get("cooldown") or 0) == 0 and w.t < getattr(self, "peek_until", -1):
-            self.peek_until = -1                         # laser back: the combo opens again
-        if not (mp.get("gun_peek") or w.t < getattr(self, "peek_until", -1)) or w.sec == "lightning" or not w.me["in_zone"]:
+        if not mp.get("gun_peek") or w.sec == "lightning" or not w.me["in_zone"]:
             return None
         c = getattr(self, "duel_cover", None)
         if c is None or math.dist(c, (w.x, w.y)) > mp.get("peek_cover_r", 20.0):
@@ -447,8 +346,6 @@ class LootAgent(Agent):
             if best is None or s < best[0]:
                 best = (s, p, dd)
         bid = self.p["bid"] + (0.15 if w.sec is None else 0.0)
-        if w.sec is None or rank.get(w.sec, 99) > 0:
-            bid += mp.get("weapon_bid_bonus", 0.0)
         if (getattr(w, "intent", None) or {}).get("intent") == "get weapon":
             bid += 0.35
         if best is not None:
@@ -490,28 +387,6 @@ class LootAgent(Agent):
 class StealthAgent(Agent):
     name = "stealth"
 
-    def __init__(self, p, kit):
-        super().__init__(p, kit)
-        self.prey = None
-
-    def pick_prey(self, w):
-        best, bs = None, 1e9
-        for e in w.enemies:
-            if e["_d"] > self.p["prey_r"]:
-                continue
-            ex, ey, _ = e["pos"]
-            facing = abs(ang_diff(math.atan2(w.y - ey, w.x - ex), e["aim"][0]))
-            s = e["_d"] + (math.pi - facing) * 25.0 + 0.02 * e.get("hp", 1400)
-            for o in w.watchers:
-                if o["id"] != e["id"] and math.dist(o["pos"][:2], (ex, ey)) < self.p["crowd_r"]:
-                    s += 60.0
-            if e["id"] == self.prey:
-                s -= 30.0
-            if s < bs:
-                best, bs = e, s
-        self.prey = best["id"] if best else None
-        return best
-
     def propose(self, w):
         R = getattr(w, "intent", None) or {}
         if R.get("intent") != "stalk" or R.get("focus") is None:
@@ -551,7 +426,7 @@ class FarmAgent(Agent):
         if w.enemies and min(e["_d"] for e in w.enemies) < mp.get("farm_enemy_r", 1e9):
             return None
         it = (getattr(w, "intent", None) or {}).get("intent")
-        if it not in (None, "rotate", "get weapon") and not (mp.get("farm_over_fights") and it in ("stalk", "strike") and not w.alerted):
+        if it not in (None, "rotate", "get weapon"):
             return None
         if w.tracker.near(w.x, w.y, w.mode_p.get("farm_clear_r", self.p.get("clear_r", 120.0)), max_age=8.0):
             return None

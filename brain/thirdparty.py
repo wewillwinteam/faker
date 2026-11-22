@@ -10,7 +10,7 @@ Reads the fights the SoundMap built from what we heard (plus tracked mechs), pic
 
 Use each decision (after world.update and tracker.update):
     soundmap.update()
-    plan = third_party_plan(world, tracker, soundmap, params)   # None = nothing to third-party
+    plan = third_party_plan(world, soundmap, params)   # None = nothing to third-party
 Standard library only; one call is ~1 ms (LOS checks are capped)."""
 import math
 from .world import ang_diff, unit, EYE, CHEST
@@ -70,7 +70,8 @@ def _fake(w, q, facing, face_unc=0.0):
 
 def _cone_depth(w, f, px, py, margin):
     """How deep (radians, 0 = outside) a spot sits in f's view: 2.0 inside its near ring, else how far inside the
-    wedge. Grows with the fighter's uncertainty like _in_cone."""
+    wedge. A fighter placed from sound could be anywhere within its uncertainty (`unc`, grows the ring and the range)
+    and its facing is a guess (`face_unc`, widens the wedge)."""
     ex, ey = f["pos"][0], f["pos"][1]
     u = f.get("unc", 0.0)
     d = math.hypot(px - ex, py - ey)
@@ -82,24 +83,10 @@ def _cone_depth(w, f, px, py, margin):
     return max(0.0, lim - abs(ang_diff(math.atan2(py - ey, px - ex), f["aim"][0])))
 
 
-def _in_cone(w, f, px, py, margin):
-    """Geometric view test (no LOS): inside f's near ring or its view wedge out to vision range. A fighter placed
-    from sound could be anywhere within its uncertainty (`unc`, grows the ring and the range) and its facing is a
-    guess (`face_unc`, widens the wedge)."""
-    ex, ey = f["pos"][0], f["pos"][1]
-    u = f.get("unc", 0.0)
-    d = math.hypot(px - ex, py - ey)
-    if d > w.vrange + 10 + u:
-        return False
-    if d < w.near + 8 + u:
-        return True
-    return abs(ang_diff(math.atan2(py - ey, px - ex), f["aim"][0])) < w.fov_half + margin + f.get("face_unc", 0.0)
-
-
 def _seen_at(w, fakes, px, py, margin):
     n = 0
     for f in fakes:
-        if _in_cone(w, f, px, py, margin):
+        if _cone_depth(w, f, px, py, margin) > 0:
             pz = w.ground(px, py, w.z)
             a, b = (f["pos"][0], f["pos"][1], f["pos"][2] + EYE), (px, py, pz + CHEST)
             if w.los(a, b):
@@ -275,7 +262,7 @@ def _route(w, fakes, goal, p, cache, busy=False):
     me = (w.x, w.y)
     key = (round(goal[0] / 15), round(goal[1] / 15))
     age = w.t - cache.get("t", -99)
-    if busy and "via" in cache and age < 2 * p["route_every_s"]:
+    if busy and "via" in cache and cache.get("key") == key and age < 2 * p["route_every_s"]:
         return cache.get("via"), cache.get("exp", 0)
     if cache.get("key") == key and age < p["route_every_s"]:
         via = cache.get("via")
@@ -307,7 +294,7 @@ def _route(w, fakes, goal, p, cache, busy=False):
     return via, exp
 
 
-def third_party_plan(w, tracker, soundmap, params=None):
+def third_party_plan(w, soundmap, params=None):
     """None, or {goal, approach, target_side, fire_ok, why, ...} for the best fight to third-party."""
     if not getattr(w, "ffa", False):
         return None

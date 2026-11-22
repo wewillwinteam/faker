@@ -15,7 +15,7 @@ class Reasoner:
         self.p = p
         self.focus = None
         self.intent = "rotate"
-        self.why = ""
+        self.cur_p = p
         self.out = {}
 
     # ------------------------------------------------------------------ kill math
@@ -49,7 +49,7 @@ class Reasoner:
         best = None
         for d in (25, 35, 44, 55, 70, 90, 110, 140, 170, 200):
             k = self.ttk(w, tr, d, rear)
-            if k is not None and k <= getattr(self, "cur_p", self.p)["ttk_max"] * 0.85:
+            if k is not None and k <= self.cur_p["ttk_max"] * 0.85:
                 best = d
         return best
 
@@ -69,9 +69,9 @@ class Reasoner:
         def look(e):
             ex, ey, _ = e["pos"]
             d = e["_d"]
-            behind = abs(ang_diff(math.atan2(w.y - ey, w.x - ex), e["aim"][0])) > 1.75
-            unaware = not w.sees(e, w.x, w.y, w.z, near_pad=0.0, cone_pad=0.0)
-            k = self.ttk(w, trk.tracks.get(e["id"], e), d, behind or unaware)
+            behind = abs(ang_diff(math.atan2(w.y - ey, w.x - ex), e["aim"][0])) > math.pi / 2  # outside its 180° front arc
+            unaware = e not in w.seen_by
+            k = self.ttk(w, trk.tracks.get(e["id"], e), d, behind)   # rear x1.5 only from behind (protocol, rear armor)
             crowd = len(trk.near(ex, ey, p["crowd_r"], max_age=8.0, exclude=e["id"]))
             return d, behind, unaware, k, crowd
 
@@ -101,10 +101,7 @@ class Reasoner:
                     k = 99.0
                 s = k + 2.5 * crowd + (0.0 if e["id"] == self.focus else 1.5)
                 cands.append((s, e, d, behind, unaware, k, crowd))
-            if p.get("nearest_target"):        # F-style: the nearest one we have a line on
-                cands.sort(key=lambda c: (0 if w.los(w.muz, (c[1]["pos"][0], c[1]["pos"][1], c[1]["pos"][2] + 4.5)) else 1, c[2]))
-            else:
-                cands.sort(key=lambda c: c[0])
+            cands.sort(key=lambda c: c[0])
             early = t < p["quiet_until"]
             if w.sec is None and t < p["weapon_rush_s"]:
                 easy = [c for c in cands if c[5] <= p["ttk_easy"] and c[4] and c[6] == 0]
@@ -138,7 +135,7 @@ class Reasoner:
                 intent, why = "rotate", "no one in sight: cover ground"
         self.focus = focus
         changed = intent != self.intent or focus != self.out.get("focus")
-        self.intent, self.why = intent, why
+        self.intent = intent
         self.out = {"intent": intent, "why": why, "focus": focus, "ttk": round(ttk, 1) if ttk is not None and ttk < 99 else None,
                     "fire_ok": bool(fire_ok)}
         return self.out, changed

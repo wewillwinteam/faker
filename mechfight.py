@@ -560,6 +560,14 @@ def run(make_bot: Any) -> None:
         except (TypeError, ValueError):  # something in the action isn't JSON
             log(f"unserializable action at tick {latest['tick']}:\n{traceback.format_exc()}")
             _send({"tick": latest["tick"], **last})
+        after = getattr(bot, "after", None)  # work that can wait until the answer is out (bot.py: our world model)
+        if after is not None:
+            try:
+                after()
+            except Exception:
+                errors += 1
+                if errors <= 5 or errors % 100 == 0:
+                    log(f"after() failed at tick {latest['tick']} ({errors} so far): {traceback.format_exc()}")
 
 
 if __name__ == "__main__":

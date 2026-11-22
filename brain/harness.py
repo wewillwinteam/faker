@@ -9,7 +9,7 @@ import math
 import os
 import time
 
-from .world import World, ang_diff
+from .world import World
 from .tracker import Tracker
 from .reasoner import Reasoner
 from . import situation
@@ -35,7 +35,7 @@ class Harness:
         except Exception as e:
             self.w.soundmap = None
             self.log("error", agent="sound", err=str(e)[:120])
-        self.agents = [cls(params["agents"][cls.name], self.kit) for cls in A.ALL + [C.CoverAgent, C.HealAgent, C.MoveAfterKillAgent, C.HoldAgent, C.ThirdPartyAgent, C.RoofAgent]]
+        self.agents = [cls(params["agents"][cls.name], self.kit) for cls in A.ALL + [C.CoverAgent, C.HealAgent, C.MoveAfterKillAgent, C.HoldAgent, C.ThirdPartyAgent]]
         self.cur = None
         self.sticky = params.get("harness", {}).get("sticky", 0.08)
         self.upg_taken = []
@@ -50,7 +50,6 @@ class Harness:
         self.stay_joining = 0
         self.stance = None          # None | "run" | "stay"
         self.stance_until = -1.0
-        self.stance_why = ""
         self.calm_since = None
         self.think_t = -99.0
         self.mode_p = {}
@@ -80,7 +79,7 @@ class Harness:
         read that turns badly against us (lost outright, or new enemies joined) can turn 'stay' into 'run' early."""
         esc = self.P["agents"]["escape"]
         rd = situation.read(w, self.tracker, self.reasoner, esc)
-        if self.mode_p.get("never_run") and rd.get("verdict") == "run" and not rd.get("big"):
+        if self.mode_p.get("never_run") and rd.get("verdict") == "run":
             rd = dict(rd, verdict="stay", why="this mode never leaves a fight: " + rd["why"])
         w.fight_read = rd
         want, why = rd["verdict"], rd["why"]
@@ -100,14 +99,14 @@ class Harness:
             if want is None:
                 if self.calm_since is not None and w.t - self.calm_since >= 1.5:
                     self.log("stance", stance=None, why="clear", prev=self.stance)
-                    self.stance, self.stance_why = None, "clear"
+                    self.stance = None
             elif want != self.stance:
                 self.set_stance(w, want, why)
         return want, why
 
     def set_stance(self, w, s, why):
         self.log("stance", stance=s, why=why, prev=self.stance, lock=self.lock_s)
-        self.stance, self.stance_why, self.stance_until = s, why, w.t + self.lock_s
+        self.stance, self.stance_until = s, w.t + self.lock_s
         rd = getattr(w, "fight_read", None) or {}
         self.stay_joining = rd.get("joining", 0)
 
@@ -120,10 +119,6 @@ class Harness:
         i = min(range(len(ids)), key=lambda i: want.index(ids[i]) if ids[i] in want else 99)
         self.upg_taken.append(ids[i])
         return i
-
-    def act(self, obs):
-        self.observe(obs)
-        return self.decide(obs)
 
     def observe(self, obs):
         """The cheap half of a decision: world model, telemetry, tracker (and sound in a free-for-all). Runs on every
@@ -146,7 +141,7 @@ class Harness:
         if w.tick % 40 == 0:
             self.log("hb", hp=round(me["hp"]), alive=w.alive, cubes=me["cubes"], sec=w.sec)
         seen = bool(w.seen_by)
-        if seen and not self.was_seen:
+        if seen and not self.was_seen and self.tel is not None:
             self.log("spot", by=[e["id"] for e in w.seen_by], n_line=len([e for e in w.recent if w.has_line(e, w.x, w.y, w.z)]))
         self.was_seen = seen
 
@@ -192,12 +187,8 @@ class Harness:
                 bid += self.sticky
             if self.stance == "run" and ag.name == "cover":
                 bid += 1.0
-            if ag.name == "roof" and r is not None:
-                bid += 1.1          # high ground beats everything but the zone once we're pressed or up there
             if self.stance == "run" and ag.name == "escape":
                 bid += 0.8          # fallback only: cover had no post
-                if (getattr(w, "fight_read", None) or {}).get("flee"):
-                    bid += 0.6      # a big enemy is chasing us: get away
             if self.stance == "stay" and ag.name == "combat":
                 bid += 0.5
             if self.stance == "stay" and ag.name == "cover" and self.mode_p.get("cover_in_fights", True):
@@ -213,7 +204,7 @@ class Harness:
             self.cur = name
             self.log("sw", hp=round(me["hp"]), note=chosen.get("note", ""), alive=w.alive)
 
-        if w.t - self.think_t >= 0.5:   # a steady stream of what the brain is weighing, for the live view
+        if self.tel is not None and w.t - self.think_t >= 0.5:   # a steady stream of what the brain is weighing, for the live view
             self.think_t = w.t
             self.log("think", stance=self.stance, lock=round(max(0.0, self.stance_until - w.t), 1), want=want, why=why,
                      bids=bids, hp=round(me["hp"]), seen=len(w.seen_by), sh=len(w.shooters),
@@ -267,17 +258,6 @@ class Harness:
         if name not in ("combat", "escape") and g and g.get("ammo", 12) < 9 and g.get("reload", 0) == 0 and not fire[0]:
             act["reload"] = True
         aim = chosen["aim"] if chosen["aim"] is not None else [me["aim"][0], 0.0]
-        # reflex: scout jump (owner): hop just high enough to see over nearby buildings, when calm and the zone is behind us
-        sp = self.mode_p
-        if sp.get("scout_jump") and me["grounded"] and not w.alerted and not w.enemies and me["energy"] > 40                 and w.t - getattr(self, "scout_t", -99) > sp.get("scout_every", 4.0) and name not in ("combat", "cover", "roof"):
-            nc = w.zone["next_center"]
-            zb = abs(ang_diff(math.atan2(nc[1] - w.y, nc[0] - w.x), me["aim"][0])) > 1.9   # next circle behind us
-            if zb or w.d_next < w.zone["next_radius"] * 0.5:
-                self.scout_t = w.t
-                jump = True
-                self.log("scout", t=round(w.t, 1))
-        if w.t - getattr(self, "scout_t", -99) < sp.get("scout_jet_s", 0.5) and not me["grounded"] and me["energy"] > 30:
-            boost = True
         # reflex: dodge bullets, charging-laser lines and mortar landing spots (take less damage)
         dp = self.P.get("dodge", {})
         if dp.get("on", True):
@@ -289,10 +269,6 @@ class Harness:
                 mv = [mx / n, my / n]
                 if me["energy"] > dp.get("boost_energy", 25):
                     boost = True
-                if "laser" in dwhy and dp.get("laser_jump", False) and me["energy"] > 20:
-                    if me["grounded"]:
-                        jump = True                  # jump high, diagonally across the beam's line
-                    boost = True                     # in the air, boost = jets up
                 if w.tick - getattr(self, "dodge_log_t", -99) > 10:
                     self.dodge_log_t = w.tick
                     self.log("dodge", why=dwhy)

@@ -12,7 +12,6 @@ Safety on 1 CPU / 512 MB / read-only disk:
 Standard library only."""
 import atexit
 import json
-import os
 import queue
 import subprocess
 import sys
@@ -31,25 +30,22 @@ atexit.register(_kill_all)
 
 
 class SubprocessDriver:
-    def __init__(self, cmd, cwd=None, name="driver", env=None):
+    def __init__(self, cmd, cwd=None, name="driver"):
         self.cmd = list(cmd)
         self.cwd = cwd
         self.name = name
-        self.env = env
         self.proc = None
         self.out = queue.Queue()        # parsed JSON objects from the child's stdout, None at EOF
         self.inq = queue.Queue()        # lines for the child's stdin, None to stop the writer
         self.dead = False
         self.why = ""
         self.ready_ms = None
-        self.timeouts = 0               # answers that missed the deadline
-        self.stale = 0                  # answers that came for an older tick (dropped)
 
     # ------------------------------------------------------------------ process
     def spawn(self, hello):
         """Start the child and send it the hello. Returns False if it cannot be started."""
         try:
-            self.proc = subprocess.Popen(self.cmd, cwd=self.cwd, env=self.env, stdin=subprocess.PIPE,
+            self.proc = subprocess.Popen(self.cmd, cwd=self.cwd, stdin=subprocess.PIPE,
                                          stdout=subprocess.PIPE, stderr=None)
         except Exception as e:
             self._fail("spawn failed: %s" % e)
@@ -82,10 +78,6 @@ class SubprocessDriver:
                 self.ready_ms = (time.perf_counter() - self.t_spawn) * 1000
                 return True
 
-    def start(self, hello, timeout_s=10.0):
-        """spawn + wait_ready in one call."""
-        return self.spawn(hello) and self.wait_ready(timeout_s)
-
     def act(self, obs, timeout_s):
         """Send one observation, return the child's action for that tick, or None (late, crashed, bad line)."""
         if self.dead:
@@ -99,12 +91,10 @@ class SubprocessDriver:
         while True:
             left = end - time.perf_counter()
             if left <= 0:
-                self.timeouts += 1
                 return None
             try:
                 m = self.out.get(timeout=left)
             except queue.Empty:
-                self.timeouts += 1
                 return None
             if m is None:
                 self._fail("child closed its stdout (exit code %s)" % self.proc.poll())
@@ -114,7 +104,7 @@ class SubprocessDriver:
             t = m.get("tick")
             if t == tick:
                 return m
-            self.stale += 1             # an answer to an older observation (it ran late): the server would drop it
+            # otherwise an answer to an older observation (it ran late): dropped, the same as the server would
 
     def close(self):
         if self in _LIVE:

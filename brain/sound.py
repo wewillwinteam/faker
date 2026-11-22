@@ -655,10 +655,6 @@ class SoundMap:
         fights.sort(key=lambda f: f["dist"])
         self.fights = fights
 
-    def view(self):
-        return [{"id": f["id"], "c": [round(f["center"][0]), round(f["center"][1])], "n": len(f["participants"]),
-                 "i": round(f["intensity"], 1), "cr": f["likely_cracked"]} for f in self.fights[:3]]
-
 
 def _overlap(a, b, win=0.12):
     """Share of the shorter shot list with a shot from the other list within `win` s. One gun cannot fire twice in
